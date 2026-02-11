@@ -1,0 +1,39 @@
+name: Firebase Backend Validate
+
+on:
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Verify required Firebase backend files
+        run: |
+          test -f firestore.rules
+          test -f firestore.indexes.json
+          test -f storage.rules
+          test -f functions/package.json
+
+      - name: Install function deps
+        working-directory: functions
+        run: npm ci
+
+      - name: Lint functions
+        working-directory: functions
+        run: npm run lint
+
+      - name: Build functions
+        working-directory: functions
+        run: npm run build

@@ -1,0 +1,28 @@
+name: Firebase Config Validate
+
+on:
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  validate-config-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure firebase_options.dart is committed
+        run: test -f lib/firebase_options.dart
+
+      - name: Ensure platform secrets remain ignored
+        run: |
+          grep -q "^android/app/google-services.json$" .gitignore
+          grep -q "^ios/Runner/GoogleService-Info.plist$" .gitignore
+
+      - name: Ensure firebase_options.dart is not ignored
+        run: |
+          if grep -q "^lib/firebase_options.dart$" .gitignore; then
+            echo "lib/firebase_options.dart must not be ignored."
+            exit 1
+          fi
