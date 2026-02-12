@@ -12,22 +12,32 @@ flutter pub get
 2. Configure Firebase for this app:
 ```bash
 firebase login
-flutterfire configure --project=lankaconnect-app
+flutterfire configure --project=lankaconnect-app --platforms=android,ios
 ```
 
-3. Install Cloud Functions dependencies:
+The following files are machine-local and must be regenerated on each machine:
+- `lib/firebase_options.dart`
+- `android/app/google-services.json`
+- `ios/Runner/GoogleService-Info.plist`
+
+3. Run Firebase preflight validation:
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/firebase_preflight.ps1
+```
+
+4. Install Cloud Functions dependencies:
 ```bash
 cd functions
 npm install
 cd ..
 ```
 
-4. Deploy backend config and functions:
+5. Deploy backend config and functions:
 ```bash
 firebase deploy --only firestore:rules,firestore:indexes,functions
 ```
 
-5. Run app:
+6. Run app:
 ```bash
 flutter run
 ```

@@ -25,9 +25,13 @@ This generates/updates:
 - `ios/Runner/GoogleService-Info.plist`
 
 Policy for this repository:
-- Commit `lib/firebase_options.dart`.
+- Do not commit `lib/firebase_options.dart`.
 - Do not commit `android/app/google-services.json`.
 - Do not commit `ios/Runner/GoogleService-Info.plist`.
+
+Authoritative policy is defined in outer-root docs:
+- `../README.md`
+- `../FIREBASE_SETUP.md`
 
 Templates in `.firebase_templates/` are illustrative only and must never be used as production config values.
 

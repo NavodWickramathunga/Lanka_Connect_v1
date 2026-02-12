@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../utils/geo_utils.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/notification_service.dart';
 import '../../utils/user_roles.dart';
+import '../../widgets/service_map_preview.dart';
+import 'service_map_screen.dart';
 
 class ServiceDetailScreen extends StatelessWidget {
   const ServiceDetailScreen({super.key, required this.serviceId});
@@ -182,6 +185,7 @@ class ServiceDetailScreen extends StatelessWidget {
         final location = (city.isNotEmpty || district.isNotEmpty)
             ? '$city, $district'
             : (data['location'] ?? '').toString();
+        final point = GeoUtils.extractPoint(data);
 
         return Scaffold(
           appBar: AppBar(title: Text(data['title'] ?? 'Service')),
@@ -197,6 +201,31 @@ class ServiceDetailScreen extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text('Location: $location'),
                 Text('Price: LKR ${data['price'] ?? ''}'),
+                if (point != null) ...[
+                  const SizedBox(height: 12),
+                  ServiceMapPreview(
+                    point: point,
+                    title: (data['title'] ?? 'Service').toString(),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ServiceMapScreen(
+                            items: [
+                              ServiceMapItem(
+                                serviceId: serviceId,
+                                title: (data['title'] ?? 'Service').toString(),
+                                locationLabel: location,
+                                priceLabel: 'LKR ${data['price'] ?? ''}',
+                                point: point,
+                              ),
+                            ],
+                            initialCenter: point,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Text(data['description'] ?? ''),
                 const SizedBox(height: 16),

@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../utils/demo_data_service.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/user_roles.dart';
+import '../admin/admin_web_dashboard_screen.dart';
 import '../admin/admin_services_screen.dart';
 import '../bookings/booking_list_screen.dart';
 import '../chat/chat_list_screen.dart';
@@ -97,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final tabs = _tabsForRole(role);
         final items = _navItemsForRole(role);
         final selectedIndex = _currentIndex.clamp(0, tabs.length - 1);
+        final useWebAdminShell = kIsWeb && role == UserRoles.admin;
 
         return Scaffold(
           appBar: AppBar(
@@ -138,14 +141,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          body: tabs[selectedIndex],
-          floatingActionButton: _fabForRole(role, selectedIndex),
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: selectedIndex,
-            onTap: _setIndex,
-            items: items,
-            type: BottomNavigationBarType.fixed,
-          ),
+          body: useWebAdminShell ? const AdminWebDashboardScreen() : tabs[selectedIndex],
+          floatingActionButton: useWebAdminShell
+              ? null
+              : _fabForRole(role, selectedIndex),
+          bottomNavigationBar: useWebAdminShell
+              ? null
+              : BottomNavigationBar(
+                  currentIndex: selectedIndex,
+                  onTap: _setIndex,
+                  items: items,
+                  type: BottomNavigationBarType.fixed,
+                ),
         );
       },
     );

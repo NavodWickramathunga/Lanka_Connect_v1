@@ -43,7 +43,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow create: if isSelf(userId)
-        && request.resource.data.role in ['seeker', 'provider', 'admin'];
+        && request.resource.data.role in ['seeker', 'provider'];
 
       allow read: if isSelf(userId) || isAdmin();
 

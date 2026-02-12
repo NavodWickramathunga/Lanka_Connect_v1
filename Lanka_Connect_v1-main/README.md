@@ -15,10 +15,13 @@ firebase login
 flutterfire configure --project=lankaconnect-app --platforms=android,ios
 ```
 
-`lib/firebase_options.dart` is committed in this repo.  
-`android/app/google-services.json` and `ios/Runner/GoogleService-Info.plist` are machine-local and must be generated per environment.
+`lib/firebase_options.dart`, `android/app/google-services.json`, and `ios/Runner/GoogleService-Info.plist` are machine-local and must be generated per environment.
 
 Templates under `.firebase_templates/` are reference-only and must not be copied as production config.
+
+Authoritative Firebase policy is defined in the outer-root docs:
+- `../README.md`
+- `../FIREBASE_SETUP.md`
 
 3. Install Cloud Functions dependencies:
 ```bash

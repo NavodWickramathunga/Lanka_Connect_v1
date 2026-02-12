@@ -48,3 +48,6 @@ app.*.map.json
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
+Lanka_Connect_v1-main/android/app/google-services.json
+Lanka_Connect_v1-main/ios/Runner/GoogleService-Info.plist
+Lanka_Connect_v1-main/lib/firebase_options.dart

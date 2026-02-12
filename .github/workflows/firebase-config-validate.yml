@@ -1,0 +1,39 @@
+name: Firebase Config Validate
+
+on:
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  validate-config-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure firebase config files are ignored
+        run: |
+          grep -q "^android/app/google-services.json$" .gitignore
+          grep -q "^ios/Runner/GoogleService-Info.plist$" .gitignore
+          grep -q "^lib/firebase_options.dart$" .gitignore
+
+      - name: Ensure duplicate tree firebase config files are ignored
+        run: |
+          grep -q "^Lanka_Connect_v1-main/android/app/google-services.json$" .gitignore
+          grep -q "^Lanka_Connect_v1-main/ios/Runner/GoogleService-Info.plist$" .gitignore
+          grep -q "^Lanka_Connect_v1-main/lib/firebase_options.dart$" .gitignore
+
+      - name: Ensure firebase config files are not tracked
+        run: |
+          ! git ls-files --error-unmatch android/app/google-services.json
+          ! git ls-files --error-unmatch ios/Runner/GoogleService-Info.plist
+          ! git ls-files --error-unmatch lib/firebase_options.dart
+          ! git ls-files --error-unmatch Lanka_Connect_v1-main/android/app/google-services.json
+          ! git ls-files --error-unmatch Lanka_Connect_v1-main/ios/Runner/GoogleService-Info.plist
+          ! git ls-files --error-unmatch Lanka_Connect_v1-main/lib/firebase_options.dart
+
+      - name: Ensure docs include regeneration command
+        run: |
+          grep -q "flutterfire configure --project=lankaconnect-app --platforms=android,ios" README.md
+          grep -q "flutterfire configure --project=lankaconnect-app --platforms=android,ios" FIREBASE_SETUP.md

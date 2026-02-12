@@ -16,13 +16,30 @@ From project root:
 
 ```bash
 firebase login
-flutterfire configure --project=lankaconnect-app
+flutterfire configure --project=lankaconnect-app --platforms=android,ios
 ```
 
 This generates/updates:
 - `lib/firebase_options.dart`
 - `android/app/google-services.json`
 - `ios/Runner/GoogleService-Info.plist`
+
+Policy for this repository:
+- Do not commit `lib/firebase_options.dart`.
+- Do not commit `android/app/google-services.json`.
+- Do not commit `ios/Runner/GoogleService-Info.plist`.
+
+If any file above is missing, regenerate with:
+
+```bash
+flutterfire configure --project=lankaconnect-app --platforms=android,ios
+```
+
+Before run/build, validate your machine setup:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/firebase_preflight.ps1
+```
 
 ## 3) Install Dependencies
 
