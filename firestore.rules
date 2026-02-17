@@ -1,0 +1,264 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function isAdmin() {
+      return signedIn() && userDoc(request.auth.uid).data.role == 'admin';
+    }
+
+    function isProvider() {
+      return signedIn() && (
+        userDoc(request.auth.uid).data.role == 'provider' ||
+        userDoc(request.auth.uid).data.role == 'Provider' ||
+        userDoc(request.auth.uid).data.role == 'Service Provider'
+      );
+    }
+
+    function bookingDoc(bookingId) {
+      return get(/databases/$(database)/documents/bookings/$(bookingId));
+    }
+
+    function isBookingParticipant(bookingId) {
+      return signedIn() && (
+        bookingDoc(bookingId).data.providerId == request.auth.uid ||
+        bookingDoc(bookingId).data.seekerId == request.auth.uid
+      );
+    }
+
+    function immutableKeysUnchanged(keys) {
+      return request.resource.data.diff(resource.data).changedKeys().hasAny(keys) == false;
+    }
+
+    function validProviderAggregateUpdate() {
+      let changed = request.resource.data.diff(resource.data).changedKeys();
+      let hasOnlyAggregateKeys = changed.hasOnly(['averageRating', 'reviewCount', 'updatedAt']);
+      let newReviewCount = request.resource.data.reviewCount;
+      let newAverageRating = request.resource.data.averageRating;
+      let oldReviewCount = resource.data.reviewCount;
+      let expectedCount = oldReviewCount is int ? oldReviewCount + 1 : 1;
+
+      return hasOnlyAggregateKeys
+        && newReviewCount is int
+        && newReviewCount >= 0
+        && newReviewCount == expectedCount
+        && (newAverageRating is int || newAverageRating is float)
+        && newAverageRating >= 0
+        && newAverageRating <= 5;
+    }
+
+    match /users/{userId} {
+      allow create: if (
+        isSelf(userId)
+        && request.resource.data.role in ['seeker', 'provider']
+      ) || isAdmin();
+
+      allow read: if isSelf(userId) || isAdmin();
+
+      allow update: if isAdmin() || (
+        isSelf(userId)
+        && request.resource.data.role == resource.data.role
+      ) || (
+        signedIn()
+        && !isSelf(userId)
+        && validProviderAggregateUpdate()
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if signedIn() && (
+        resource.data.status == 'approved' ||
+        resource.data.providerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if (
+        isProvider()
+        && request.resource.data.providerId == request.auth.uid
+        && (
+          (
+            request.resource.data.district is string &&
+            request.resource.data.city is string
+          ) ||
+          request.resource.data.location is string
+        )
+        && request.resource.data.status == 'pending'
+      ) || (
+        isAdmin()
+        && request.resource.data.providerId is string
+        && (
+          (
+            request.resource.data.district is string &&
+            request.resource.data.city is string
+          ) ||
+          request.resource.data.location is string
+        )
+        && request.resource.data.status in ['pending', 'approved', 'rejected']
+      );
+
+      allow update: if (
+        signedIn()
+        && resource.data.providerId == request.auth.uid
+        && request.resource.data.providerId == resource.data.providerId
+        && request.resource.data.status == resource.data.status
+      ) || (
+        isAdmin()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['pending', 'approved', 'rejected']
+      );
+
+      allow delete: if isAdmin() || (signedIn() && resource.data.providerId == request.auth.uid);
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if signedIn() && (
+        resource.data.providerId == request.auth.uid ||
+        resource.data.seekerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.seekerId == request.auth.uid
+        && request.resource.data.providerId is string
+        && request.resource.data.serviceId is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.providerId != request.auth.uid
+        && exists(/databases/$(database)/documents/services/$(request.resource.data.serviceId))
+        && get(/databases/$(database)/documents/services/$(request.resource.data.serviceId)).data.providerId == request.resource.data.providerId;
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.providerId == request.auth.uid
+        && request.resource.data.providerId == resource.data.providerId
+        && request.resource.data.seekerId == resource.data.seekerId
+        && request.resource.data.serviceId == resource.data.serviceId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status'])
+        && (
+          (resource.data.status == 'pending' && request.resource.data.status in ['accepted', 'rejected']) ||
+          (resource.data.status == 'accepted' && request.resource.data.status == 'completed') ||
+          (resource.data.status == request.resource.data.status)
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /requests/{requestId} {
+      allow read: if signedIn() && (
+        resource.data.providerId == request.auth.uid ||
+        resource.data.seekerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.seekerId == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.providerId == request.auth.uid
+        && immutableKeysUnchanged(['serviceId', 'providerId', 'seekerId'])
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status'])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if signedIn() && isBookingParticipant(resource.data.chatId);
+
+      allow create: if signedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.chatId is string
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && isBookingParticipant(request.resource.data.chatId);
+
+      allow update, delete: if false;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.reviewerId == request.auth.uid
+        && request.resource.data.bookingId is string
+        && request.resource.data.serviceId is string
+        && request.resource.data.providerId is string
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && exists(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId))
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.seekerId == request.auth.uid
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.providerId == request.resource.data.providerId
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.serviceId == request.resource.data.serviceId
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.status == 'completed';
+
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && (
+        resource.data.recipientId == request.auth.uid || isAdmin()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId is string
+        && request.resource.data.title is string
+        && request.resource.data.body is string;
+
+      allow update: if signedIn()
+        && resource.data.recipientId == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['isRead', 'readAt'])
+        && request.resource.data.isRead == true;
+
+      allow delete: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if signedIn() && (
+        resource.data.seekerId == request.auth.uid ||
+        resource.data.providerId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.seekerId == request.auth.uid
+        && request.resource.data.providerId is string
+        && request.resource.data.serviceId is string
+        && request.resource.data.bookingId is string
+        && request.resource.data.gateway == 'demo'
+        && request.resource.data.status in ['success', 'failed']
+        && (
+          request.resource.data.amount is int ||
+          request.resource.data.amount is float
+        )
+        && request.resource.data.amount >= 0
+        && exists(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId))
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.seekerId == request.auth.uid
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.providerId == request.resource.data.providerId
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.serviceId == request.resource.data.serviceId
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.status == 'accepted';
+
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

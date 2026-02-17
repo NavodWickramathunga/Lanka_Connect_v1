@@ -1,0 +1,75 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Firebase secrets (DO NOT COMMIT)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+Lanka_Connect_v1-main/android/app/google-services.json
+Lanka_Connect_v1-main/ios/Runner/GoogleService-Info.plist
+Lanka_Connect_v1-main/lib/firebase_options.dart
+# Nested duplicate folder
+Lanka_Connect_v1-main/
+
+# Build outputs and caches
+build/
+build_output.txt
+build_log.txt
+.gradle/
+.gradle-user/
+.metadata
+
+# Node dependencies
+node_modules/
+functions/lib/
+
+# Environment files
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.bak
