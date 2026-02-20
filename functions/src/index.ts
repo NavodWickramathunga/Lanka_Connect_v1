@@ -4,6 +4,7 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {initializeApp} from "firebase-admin/app";
 import {FieldValue, getFirestore} from "firebase-admin/firestore";
+import {getMessaging} from "firebase-admin/messaging";
 
 initializeApp();
 const db = getFirestore();
@@ -261,3 +262,100 @@ export const seedDemoData = onCall(async (request) => {
     reviewId,
   };
 });
+
+// ── FCM Push Notification on Firestore notification creation ──
+export const sendPushOnNotificationCreate = onDocumentCreated(
+  "notifications/{notificationId}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const recipientId = (data.recipientId ?? "").toString();
+    const title = (data.title ?? "Lanka Connect").toString();
+    const body = (data.body ?? "").toString();
+
+    if (!recipientId || recipientId === "__admins__") {
+      // Admin channel notifications: send to all admins
+      if (recipientId === "__admins__") {
+        const adminsSnap = await db.collection("users")
+          .where("role", "==", "admin")
+          .get();
+
+        const tokens: string[] = [];
+        for (const adminDoc of adminsSnap.docs) {
+          const adminData = adminDoc.data();
+          if (adminData.fcmToken) {
+            tokens.push(adminData.fcmToken);
+          }
+        }
+
+        if (tokens.length > 0) {
+          try {
+            const response = await getMessaging().sendEachForMulticast({
+              tokens,
+              notification: {title, body},
+              data: {
+                notificationId: event.params.notificationId,
+                type: (data.type ?? "general").toString(),
+              },
+            });
+            logger.info("Sent admin push notifications", {
+              successCount: response.successCount,
+              failureCount: response.failureCount,
+            });
+          } catch (err) {
+            logger.error("Failed to send admin push", {error: err});
+          }
+        }
+      }
+      return;
+    }
+
+    // Single recipient: look up their FCM token
+    const recipientDoc = await db.collection("users").doc(recipientId).get();
+    const recipientData = recipientDoc.data();
+    const fcmToken = recipientData?.fcmToken;
+
+    if (!fcmToken) {
+      logger.info("No FCM token for recipient, skipping push", {recipientId});
+      return;
+    }
+
+    try {
+      await getMessaging().send({
+        token: fcmToken,
+        notification: {title, body},
+        data: {
+          notificationId: event.params.notificationId,
+          type: (data.type ?? "general").toString(),
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "lanka_connect_notifications",
+            priority: "high",
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              badge: 1,
+              sound: "default",
+            },
+          },
+        },
+      });
+
+      logger.info("Push notification sent", {
+        notificationId: event.params.notificationId,
+        recipientId,
+      });
+    } catch (err) {
+      logger.error("Failed to send push notification", {
+        notificationId: event.params.notificationId,
+        recipientId,
+        error: err,
+      });
+    }
+  }
+);

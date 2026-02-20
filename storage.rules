@@ -28,6 +28,11 @@ service firebase.storage {
         && validImageUpload();
     }
 
+    match /service_images/{serviceId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && validImageUpload();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -6,8 +6,23 @@ import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/service_moderation_service.dart';
 
-class AdminServicesScreen extends StatelessWidget {
+class AdminServicesScreen extends StatefulWidget {
   const AdminServicesScreen({super.key});
+
+  @override
+  State<AdminServicesScreen> createState() => _AdminServicesScreenState();
+}
+
+class _AdminServicesScreenState extends State<AdminServicesScreen> {
+  String _statusFilter = 'pending';
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _updateStatus(
     BuildContext context,
@@ -26,10 +41,12 @@ class AdminServicesScreen extends StatelessWidget {
         stackTrace: st,
         details: {'serviceId': serviceId, 'status': status},
       );
-      FirestoreErrorHandler.showError(
-        context,
-        FirestoreErrorHandler.toUserMessage(e),
-      );
+      if (mounted) {
+        FirestoreErrorHandler.showError(
+          context,
+          FirestoreErrorHandler.toUserMessage(e),
+        );
+      }
     } catch (e, st) {
       FirestoreErrorHandler.logWriteError(
         operation: 'services_update_status_unknown',
@@ -37,74 +54,193 @@ class AdminServicesScreen extends StatelessWidget {
         stackTrace: st,
         details: {'serviceId': serviceId, 'status': status},
       );
-      FirestoreErrorHandler.showError(
-        context,
-        FirestoreErrorHandler.toUserMessage(e),
-      );
+      if (mounted) {
+        FirestoreErrorHandler.showError(
+          context,
+          FirestoreErrorHandler.toUserMessage(e),
+        );
+      }
     }
+  }
+
+  /// Returns a human-readable SLA label from a Firestore Timestamp.
+  String _slaLabel(Timestamp? ts) {
+    if (ts == null) return '';
+    final diff = DateTime.now().difference(ts.toDate());
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  Color _slaColor(Timestamp? ts) {
+    if (ts == null) return Colors.grey;
+    final hours = DateTime.now().difference(ts.toDate()).inHours;
+    if (hours < 12) return Colors.green;
+    if (hours < 48) return Colors.orange;
+    return Colors.red;
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirestoreRefs.services()
-          .where('status', isEqualTo: 'pending')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    Query<Map<String, dynamic>> query = FirestoreRefs.services();
+    if (_statusFilter != 'all') {
+      query = query.where('status', isEqualTo: _statusFilter);
+    }
 
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) {
-          if (!kIsWeb) return const Center(child: Text('No pending services.'));
-          return const WebPageScaffold(
-            title: 'Moderation',
-            subtitle: 'Review and moderate pending service postings.',
-            useScaffold: false,
-            child: Center(child: Text('No pending services.')),
-          );
-        }
-
-        final list = ListView.builder(
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final doc = docs[index];
-            final data = doc.data();
-            return Card(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: ListTile(
-                title: Text(data['title'] ?? 'Service'),
-                subtitle: Text(data['category'] ?? ''),
-                trailing: Wrap(
-                  spacing: 8,
-                  children: [
-                    TextButton(
-                      onPressed: () =>
-                          _updateStatus(context, doc.id, 'approved'),
-                      child: const Text('Approve'),
-                    ),
-                    TextButton(
-                      onPressed: () =>
-                          _updateStatus(context, doc.id, 'rejected'),
-                      child: const Text('Reject'),
-                    ),
-                  ],
+    final body = Column(
+      children: [
+        // ── Filter bar ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search by title or category…',
+                    prefixIcon: Icon(Icons.search),
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) =>
+                      setState(() => _searchQuery = v.trim().toLowerCase()),
                 ),
               ),
-            );
-          },
-        );
+              const SizedBox(width: 12),
+              DropdownButton<String>(
+                value: _statusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'pending', child: Text('Pending')),
+                  DropdownMenuItem(value: 'approved', child: Text('Approved')),
+                  DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
+                  DropdownMenuItem(value: 'all', child: Text('All')),
+                ],
+                onChanged: (v) {
+                  if (v != null) setState(() => _statusFilter = v);
+                },
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        // ── Service list ──
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: query.snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-        if (!kIsWeb) return list;
+              var docs = snapshot.data?.docs ?? [];
 
-        return WebPageScaffold(
-          title: 'Moderation',
-          subtitle: 'Review and moderate pending service postings.',
-          useScaffold: false,
-          child: list,
-        );
-      },
+              // Client-side search filter
+              if (_searchQuery.isNotEmpty) {
+                docs = docs.where((d) {
+                  final data = d.data();
+                  final title = (data['title'] ?? '').toString().toLowerCase();
+                  final cat = (data['category'] ?? '').toString().toLowerCase();
+                  return title.contains(_searchQuery) ||
+                      cat.contains(_searchQuery);
+                }).toList();
+              }
+
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Text('No services match the current filters.'),
+                );
+              }
+
+              return ListView.builder(
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final doc = docs[index];
+                  final data = doc.data();
+                  final status = (data['status'] ?? 'pending').toString();
+                  final createdAt = data['createdAt'] as Timestamp?;
+
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    child: ListTile(
+                      title: Text(data['title'] ?? 'Service'),
+                      subtitle: Row(
+                        children: [
+                          Text(data['category'] ?? ''),
+                          if (status == 'pending' && createdAt != null) ...[
+                            const SizedBox(width: 12),
+                            Icon(
+                              Icons.schedule,
+                              size: 14,
+                              color: _slaColor(createdAt),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _slaLabel(createdAt),
+                              style: TextStyle(
+                                color: _slaColor(createdAt),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      trailing: status == 'pending'
+                          ? Wrap(
+                              spacing: 8,
+                              children: [
+                                TextButton.icon(
+                                  icon: const Icon(Icons.check, size: 18),
+                                  label: const Text('Approve'),
+                                  onPressed: () => _updateStatus(
+                                    context,
+                                    doc.id,
+                                    'approved',
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  label: const Text('Reject'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                  ),
+                                  onPressed: () => _updateStatus(
+                                    context,
+                                    doc.id,
+                                    'rejected',
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Chip(
+                              label: Text(
+                                status[0].toUpperCase() + status.substring(1),
+                              ),
+                              backgroundColor: status == 'approved'
+                                  ? Colors.green.shade50
+                                  : Colors.red.shade50,
+                            ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+
+    if (!kIsWeb) return body;
+
+    return WebPageScaffold(
+      title: 'Moderation',
+      subtitle: 'Review and moderate pending service postings.',
+      useScaffold: false,
+      child: body,
     );
   }
 }

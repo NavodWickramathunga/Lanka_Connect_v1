@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/permissions/required_permissions_screen.dart';
@@ -9,11 +10,21 @@ import 'ui/mobile/mobile_theme.dart';
 import 'ui/theme/app_theme_controller.dart';
 import 'firebase_options.dart';
 import 'utils/firebase_env.dart';
+import 'utils/fcm_service.dart';
+import 'utils/app_logger.dart';
+
+/// Top-level background message handler for FCM.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('FCM background message: ${message.notification?.title}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FirebaseEnv.configure();
+  await AppLogger.initialize();
   debugPrint(
     'Firebase boot: projectId=${DefaultFirebaseOptions.currentPlatform.projectId}',
   );
@@ -23,6 +34,7 @@ void main() async {
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   runApp(const MyApp());
 }
 
@@ -61,6 +73,8 @@ class AuthGate extends StatelessWidget {
         }
 
         if (snapshot.hasData) {
+          // Initialize FCM after successful authentication
+          FcmService.initialize();
           return const HomeScreen();
         }
 

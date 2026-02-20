@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'app_logger.dart';
 
 class FirestoreErrorHandler {
   static String toUserMessageForOperation(Object error, {String? operation}) {
@@ -58,9 +59,11 @@ class FirestoreErrorHandler {
     StackTrace? stackTrace,
     Map<String, Object?> details = const {},
   }) {
-    debugPrint('Write error [$operation]: $error | details: $details');
-    if (stackTrace != null) {
-      debugPrint(stackTrace.toString());
-    }
+    AppLogger.logOperation(
+      operation: operation,
+      error: error,
+      stackTrace: stackTrace,
+      details: details,
+    );
   }
 }

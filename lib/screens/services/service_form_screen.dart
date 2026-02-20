@@ -1,7 +1,13 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
 import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
@@ -26,6 +32,8 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
   final _descriptionController = TextEditingController();
 
   bool _saving = false;
+  final List<XFile> _selectedImages = [];
+  static const int _maxImages = 5;
 
   @override
   void dispose() {
@@ -38,6 +46,65 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
     _lngController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final picker = ImagePicker();
+      final remaining = _maxImages - _selectedImages.length;
+      if (remaining <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Maximum 5 images allowed.')),
+          );
+        }
+        return;
+      }
+      final images = await picker.pickMultiImage(
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 80,
+      );
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages.addAll(images.take(remaining));
+        });
+      }
+    } catch (e) {
+      debugPrint('Image picker error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to pick images.')));
+      }
+    }
+  }
+
+  Future<List<String>> _uploadImages(String serviceId) async {
+    final urls = <String>[];
+    for (var i = 0; i < _selectedImages.length; i++) {
+      final file = _selectedImages[i];
+      final ext = file.name.split('.').last;
+      final mimeType = lookupMimeType(file.name) ?? 'image/jpeg';
+      final ref = FirebaseStorage.instance.ref(
+        'service_images/$serviceId/${i}_${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+
+      UploadTask task;
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
+        task = ref.putData(bytes, SettableMetadata(contentType: mimeType));
+      } else {
+        task = ref.putFile(
+          File(file.path),
+          SettableMetadata(contentType: mimeType),
+        );
+      }
+      final snapshot = await task;
+      final url = await snapshot.ref.getDownloadURL();
+      urls.add(url);
+    }
+    return urls;
   }
 
   Future<void> _save() async {
@@ -61,7 +128,7 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
       final lat = double.tryParse(_latController.text.trim());
       final lng = double.tryParse(_lngController.text.trim());
 
-      await FirestoreRefs.services().add({
+      final docRef = await FirestoreRefs.services().add({
         'providerId': user.uid,
         'title': _titleController.text.trim(),
         'category': _categoryController.text.trim(),
@@ -73,8 +140,16 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
         'lng': lng,
         'description': _descriptionController.text.trim(),
         'status': 'pending',
+        'imageUrls': <String>[],
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // Upload images if any were selected
+      if (_selectedImages.isNotEmpty) {
+        final imageUrls = await _uploadImages(docRef.id);
+        await docRef.update({'imageUrls': imageUrls});
+      }
+
       saved = true;
     } on FirebaseException catch (e, st) {
       FirestoreErrorHandler.logWriteError(
@@ -141,7 +216,8 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
               controller: _priceController,
               decoration: const InputDecoration(labelText: 'Price (LKR)'),
               keyboardType: TextInputType.number,
-              validator: (value) => Validators.priceField(value, 'Price required'),
+              validator: (value) =>
+                  Validators.priceField(value, 'Price required'),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -154,7 +230,8 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
             TextFormField(
               controller: _cityController,
               decoration: const InputDecoration(labelText: 'City'),
-              validator: (value) => Validators.requiredField(value, 'City required'),
+              validator: (value) =>
+                  Validators.requiredField(value, 'City required'),
             ),
             const SizedBox(height: 12),
             Row(
@@ -196,6 +273,93 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
                 style: TextStyle(fontSize: 12),
               ),
             ),
+            const SizedBox(height: 16),
+            // ── Image Picker Section ──
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Service Images (${_selectedImages.length}/$_maxImages)',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_selectedImages.isNotEmpty)
+              SizedBox(
+                height: 100,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _selectedImages.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: kIsWeb
+                                ? FutureBuilder<Uint8List>(
+                                    future: _selectedImages[index]
+                                        .readAsBytes(),
+                                    builder: (context, snap) {
+                                      if (!snap.hasData) {
+                                        return const SizedBox(
+                                          width: 100,
+                                          height: 100,
+                                          child: Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        );
+                                      }
+                                      return Image.memory(
+                                        snap.data!,
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.cover,
+                                      );
+                                    },
+                                  )
+                                : Image.file(
+                                    File(_selectedImages[index].path),
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                  ),
+                          ),
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedImages.removeAt(index);
+                                });
+                              },
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                padding: const EdgeInsets.all(4),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _saving ? null : _pickImages,
+              icon: const Icon(Icons.add_photo_alternate),
+              label: const Text('Add Images'),
+            ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _descriptionController,
@@ -223,6 +387,9 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
       );
     }
 
-    return Scaffold(appBar: AppBar(title: const Text('Post Service')), body: body);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Post Service')),
+      body: body,
+    );
   }
 }

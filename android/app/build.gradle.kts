@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.lanka_connect"
+    namespace = "com.lankaconnect.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,21 +21,51 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.lanka_connect"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.lankaconnect.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
+    }
+
+    signingConfigs {
+        // Release signing: provide via environment variables or local keystore.properties
+        // To set up:
+        //   1. Generate a keystore:  keytool -genkey -v -keystore upload-keystore.jks ...
+        //   2. Create android/keystore.properties with:
+        //        storeFile=../upload-keystore.jks
+        //        storePassword=<password>
+        //        keyAlias=upload
+        //        keyPassword=<password>
+        val keystorePropertiesFile = rootProject.file("keystore.properties")
+        if (keystorePropertiesFile.exists()) {
+            val props = java.util.Properties()
+            props.load(keystorePropertiesFile.inputStream())
+            create("release") {
+                storeFile = file(props["storeFile"] as String)
+                storePassword = props["storePassword"] as String
+                keyAlias = props["keyAlias"] as String
+                keyPassword = props["keyPassword"] as String
+            }
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            val keystorePropertiesFile = rootProject.file("keystore.properties")
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                // Fall back to debug signing when no keystore is configured
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
