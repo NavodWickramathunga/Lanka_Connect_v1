@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'firestore_refs.dart';
+import 'notification_service.dart';
 
 class ReviewService {
   static Future<void> submitReview({
@@ -57,5 +58,32 @@ class ReviewService {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     });
+
+    await NotificationService.createMany(
+      recipientIds: [providerId, user.uid],
+      title: 'New review submitted',
+      body: 'A review was submitted with rating $rating/5.',
+      type: 'review',
+      data: {
+        'bookingId': bookingId,
+        'serviceId': serviceId,
+        'providerId': providerId,
+        'reviewerId': user.uid,
+        'rating': rating,
+      },
+    );
+
+    await NotificationService.notifyAdmins(
+      title: 'Review submitted',
+      body: 'A review was submitted with rating $rating/5.',
+      type: 'review',
+      data: {
+        'bookingId': bookingId,
+        'serviceId': serviceId,
+        'providerId': providerId,
+        'reviewerId': user.uid,
+        'rating': rating,
+      },
+    );
   }
 }

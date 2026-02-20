@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/display_name_utils.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/user_roles.dart';
@@ -12,7 +14,7 @@ class AdminWebDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
+    final content = DefaultTabController(
       length: 3,
       child: Column(
         children: const [
@@ -34,6 +36,15 @@ class AdminWebDashboardScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    if (!kIsWeb) return content;
+
+    return WebPageScaffold(
+      title: 'Admin Dashboard',
+      subtitle: 'Monitor moderation, users, and platform analytics.',
+      useScaffold: false,
+      child: content,
     );
   }
 }

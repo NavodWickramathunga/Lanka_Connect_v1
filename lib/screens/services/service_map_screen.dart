@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../ui/web/web_page_scaffold.dart';
 
 class ServiceMapItem {
   const ServiceMapItem({
@@ -38,6 +40,18 @@ class _ServiceMapScreenState extends State<ServiceMapScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) {
+      if (kIsWeb) {
+        return const WebPageScaffold(
+          title: 'Service Map',
+          subtitle: 'Map view of services by location data.',
+          useScaffold: true,
+          child: Center(
+            child: Text(
+              'No mappable locations found. Add city/district or coordinates to view services on map.',
+            ),
+          ),
+        );
+      }
       return Scaffold(
         appBar: AppBar(title: const Text('Service Map')),
         body: const Center(
@@ -52,22 +66,30 @@ class _ServiceMapScreenState extends State<ServiceMapScreen> {
     final center = widget.initialCenter ?? selected.point;
     final isWide = MediaQuery.of(context).size.width >= 900;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Service Map')),
-      body: isWide
-          ? Row(
-              children: [
-                Expanded(child: _mapPanel(center)),
-                SizedBox(width: 360, child: _listPanel()),
-              ],
-            )
-          : Column(
-              children: [
-                Expanded(flex: 3, child: _mapPanel(center)),
-                Expanded(flex: 2, child: _listPanel()),
-              ],
-            ),
-    );
+    final body = isWide
+        ? Row(
+            children: [
+              Expanded(child: _mapPanel(center)),
+              SizedBox(width: 360, child: _listPanel()),
+            ],
+          )
+        : Column(
+            children: [
+              Expanded(flex: 3, child: _mapPanel(center)),
+              Expanded(flex: 2, child: _listPanel()),
+            ],
+          );
+
+    if (kIsWeb) {
+      return WebPageScaffold(
+        title: 'Service Map',
+        subtitle: 'Map view of services by location data.',
+        useScaffold: true,
+        child: body,
+      );
+    }
+
+    return Scaffold(appBar: AppBar(title: const Text('Service Map')), body: body);
   }
 
   Widget _mapPanel(LatLng center) {

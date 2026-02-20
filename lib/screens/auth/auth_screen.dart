@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/mobile/mobile_components.dart';
+import '../../ui/mobile/mobile_tokens.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/user_roles.dart';
 import '../../utils/validators.dart';
@@ -19,6 +22,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLogin = true;
   bool _loading = false;
   String _role = UserRoles.seeker;
+  String _portalRole = UserRoles.seeker;
   String? _error;
 
   @override
@@ -33,6 +37,13 @@ class _AuthScreenState extends State<AuthScreen> {
     if (form == null || !form.validate()) {
       return;
     }
+    if (!_isLogin && _portalRole == UserRoles.admin) {
+      setState(() {
+        _error =
+            'Admin accounts cannot be created here. Use an existing admin account to sign in.';
+      });
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -40,10 +51,11 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isLogin) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
+        await _validatePortalRole(credential.user);
       } else {
         final credential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
@@ -52,6 +64,10 @@ class _AuthScreenState extends State<AuthScreen> {
             );
         await _createUserProfile(credential.user);
       }
+    } on _PortalRoleMismatch catch (e) {
+      setState(() {
+        _error = e.message;
+      });
     } on FirebaseAuthException catch (e) {
       String errorMessage;
       switch (e.code) {
@@ -111,6 +127,315 @@ class _AuthScreenState extends State<AuthScreen> {
     await doc.set(data, SetOptions(merge: true));
   }
 
+  Future<void> _validatePortalRole(User? user) async {
+    if (user == null) return;
+
+    final snapshot = await FirestoreRefs.users().doc(user.uid).get();
+    final profileRole = UserRoles.normalize(snapshot.data()?['role']);
+    if (profileRole == _portalRole) {
+      return;
+    }
+
+    await FirebaseAuth.instance.signOut();
+    throw _PortalRoleMismatch(
+      'This account is registered as ${_roleLabel(profileRole)}. '
+      'Please sign in via the ${_roleLabel(profileRole)} portal.',
+    );
+  }
+
+  String _roleLabel(String role) {
+    if (role == UserRoles.provider) return 'Provider';
+    if (role == UserRoles.admin) return 'Admin';
+    return 'Seeker';
+  }
+
+  IconData _roleIcon(String role) {
+    if (role == UserRoles.provider) return Icons.engineering;
+    if (role == UserRoles.admin) return Icons.admin_panel_settings;
+    return Icons.search;
+  }
+
+  String _portalHeadline() {
+    if (_portalRole == UserRoles.provider) {
+      return 'Provider workspace login';
+    }
+    if (_portalRole == UserRoles.admin) {
+      return 'Admin control center login';
+    }
+    return 'Seeker portal login';
+  }
+
+  Widget _portalSelector({required bool compact}) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        _PortalChip(
+          label: 'Seeker',
+          icon: _roleIcon(UserRoles.seeker),
+          selected: _portalRole == UserRoles.seeker,
+          onTap: _loading
+              ? null
+              : () {
+                  setState(() {
+                    _portalRole = UserRoles.seeker;
+                    if (!_isLogin) {
+                      _role = UserRoles.seeker;
+                    }
+                  });
+                },
+          compact: compact,
+        ),
+        _PortalChip(
+          label: 'Provider',
+          icon: _roleIcon(UserRoles.provider),
+          selected: _portalRole == UserRoles.provider,
+          onTap: _loading
+              ? null
+              : () {
+                  setState(() {
+                    _portalRole = UserRoles.provider;
+                    if (!_isLogin) {
+                      _role = UserRoles.provider;
+                    }
+                  });
+                },
+          compact: compact,
+        ),
+        _PortalChip(
+          label: 'Admin',
+          icon: _roleIcon(UserRoles.admin),
+          selected: _portalRole == UserRoles.admin,
+          onTap: _loading
+              ? null
+              : () {
+                  setState(() {
+                    _portalRole = UserRoles.admin;
+                  });
+                },
+          compact: compact,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAuthForm({required bool webLayout}) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _portalHeadline(),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _isLogin
+                ? 'Use the correct portal for your account type.'
+                : 'Create a new account for seekers or providers.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFFC9D7E6)
+                  : const Color(0xFF4A6072),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _portalSelector(compact: !webLayout),
+          const SizedBox(height: 18),
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) => Validators.emailField(value),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _passwordController,
+            decoration: const InputDecoration(
+              labelText: 'Password',
+              border: OutlineInputBorder(),
+            ),
+            obscureText: true,
+            validator: (value) =>
+                Validators.passwordField(value, isLogin: _isLogin),
+          ),
+          const SizedBox(height: 12),
+          if (!_isLogin)
+            DropdownButtonFormField<String>(
+              initialValue: _role,
+              items: const [
+                DropdownMenuItem(
+                  value: UserRoles.seeker,
+                  child: Text('Service Seeker'),
+                ),
+                DropdownMenuItem(
+                  value: UserRoles.provider,
+                  child: Text('Service Provider'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _role = value;
+                  _portalRole = value;
+                });
+              },
+              decoration: const InputDecoration(
+                labelText: 'Create account as',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+          ],
+          const SizedBox(height: 18),
+          ElevatedButton(
+            onPressed: _loading ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            child: Text(
+              _loading
+                  ? 'Please wait...'
+                  : _isLogin
+                  ? 'Login to ${_roleLabel(_portalRole)} Portal'
+                  : 'Create account',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: _loading
+                ? null
+                : () {
+                    setState(() {
+                      _isLogin = !_isLogin;
+                      _error = null;
+                      if (!_isLogin && _portalRole == UserRoles.admin) {
+                        _portalRole = UserRoles.seeker;
+                        _role = UserRoles.seeker;
+                      }
+                    });
+                  },
+            child: Text(
+              _isLogin
+                  ? 'Need an account? Sign up'
+                  : 'Already have an account? Login',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebLayout() {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFF2F7FF), Color(0xFFE8FFF7)],
+          ),
+        ),
+        child: Center(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 980;
+              final content = <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF103B56),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Text(
+                        'Lanka Connect',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'A dedicated website login experience for seekers, providers, and admins.',
+                        style: TextStyle(
+                          color: Color(0xFFD4E8F6),
+                          fontSize: 16,
+                          height: 1.4,
+                        ),
+                      ),
+                      SizedBox(height: 26),
+                      _FeatureLine(
+                        icon: Icons.search,
+                        text: 'Seekers discover trusted local services quickly.',
+                      ),
+                      SizedBox(height: 10),
+                      _FeatureLine(
+                        icon: Icons.engineering,
+                        text: 'Providers manage visibility, bookings, and communication.',
+                      ),
+                      SizedBox(height: 10),
+                      _FeatureLine(
+                        icon: Icons.admin_panel_settings,
+                        text: 'Admins monitor quality and maintain platform safety.',
+                      ),
+                    ],
+                  ),
+                ),
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: _buildAuthForm(webLayout: true),
+                  ),
+                ),
+              ];
+
+              return ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1140),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: isNarrow
+                      ? SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              content[0],
+                              const SizedBox(height: 16),
+                              content[1],
+                            ],
+                          ),
+                        )
+                      : Row(
+                          children: [
+                            Expanded(child: content[0]),
+                            const SizedBox(width: 24),
+                            Expanded(child: content[1]),
+                          ],
+                        ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   String _nameFromEmail(String email) {
     final atIndex = email.indexOf('@');
     if (atIndex <= 0) return '';
@@ -131,93 +456,151 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return _buildWebLayout();
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text(_isLogin ? 'Login' : 'Sign Up')),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    validator: (value) => Validators.emailField(value),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    validator: (value) =>
-                        Validators.passwordField(value, isLogin: _isLogin),
-                  ),
-                  const SizedBox(height: 12),
-                  if (!_isLogin)
-                    DropdownButtonFormField<String>(
-                      value: _role,
-                      items: const [
-                        DropdownMenuItem(
-                          value: UserRoles.seeker,
-                          child: Text('Service Seeker'),
+      backgroundColor: const Color(0xFF00A58E),
+      body: SizedBox.expand(
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF0F6CBD), Color(0xFF00A58E)],
+            ),
+          ),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - 32,
+                    ),
+                    child: Column(
+                      children: [
+                        const MobileGradientHeader(
+                          title: 'Lanka Connect',
+                          subtitle: 'Welcome back to your local service network',
+                          accentColor: MobileTokens.accent,
                         ),
-                        DropdownMenuItem(
-                          value: UserRoles.provider,
-                          child: Text('Service Provider'),
+                        const SizedBox(height: 14),
+                        MobileSectionCard(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            child: KeyedSubtree(
+                              key: ValueKey('${_isLogin}_$_portalRole'),
+                              child: _buildAuthForm(
+                                webLayout: false,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() {
-                          _role = value;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        labelText: 'Select role',
-                      ),
-                    ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _loading ? null : _submit,
-                    child: Text(
-                      _loading
-                          ? 'Please wait...'
-                          : _isLogin
-                          ? 'Login'
-                          : 'Create account',
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _loading
-                        ? null
-                        : () {
-                            setState(() {
-                              _isLogin = !_isLogin;
-                              _error = null;
-                            });
-                          },
-                    child: Text(
-                      _isLogin
-                          ? 'Need an account? Sign up'
-                          : 'Already have an account? Login',
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PortalRoleMismatch implements Exception {
+  _PortalRoleMismatch(this.message);
+
+  final String message;
+}
+
+class _PortalChip extends StatelessWidget {
+  const _PortalChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    required this.compact,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = selected
+        ? (isDark ? const Color(0xFF79B7FF) : const Color(0xFF1769AA))
+        : (isDark ? const Color(0xFF3B4E66) : const Color(0xFFD0DCE8));
+    final backgroundColor = selected
+        ? (isDark ? const Color(0xFF2A4E7A) : const Color(0xFFE7F1FA))
+        : (isDark ? const Color(0xFF1A2635) : Colors.white);
+    final contentColor = selected
+        ? (isDark ? const Color(0xFFEAF4FF) : const Color(0xFF0D3E63))
+        : (isDark ? const Color(0xFFD6E5F5) : const Color(0xFF1E3245));
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 14,
+          vertical: compact ? 8 : 10,
+        ),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: compact ? 16 : 18, color: contentColor),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: contentColor,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeatureLine extends StatelessWidget {
+  const _FeatureLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Color(0xFF8FE3C4), size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(color: Color(0xFFE8F2FA), height: 1.4),
+          ),
+        ),
+      ],
     );
   }
 }

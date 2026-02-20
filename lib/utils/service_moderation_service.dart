@@ -18,7 +18,8 @@ class ServiceModerationService {
     }
 
     final serviceRef = FirestoreRefs.services().doc(serviceId);
-    final notificationRef = FirestoreRefs.notifications().doc();
+    final providerNotificationRef = FirestoreRefs.notifications().doc();
+    final adminNotificationRef = FirestoreRefs.notifications().doc();
 
     await FirebaseFirestore.instance.runTransaction((tx) async {
       final serviceSnap = await tx.get(serviceRef);
@@ -33,26 +34,36 @@ class ServiceModerationService {
       final serviceData = serviceSnap.data() ?? {};
       final providerId = (serviceData['providerId'] ?? '').toString();
       final previousStatus = (serviceData['status'] ?? '').toString();
+      final title = (serviceData['title'] ?? 'Service').toString();
 
       tx.update(serviceRef, {
         'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      if (status == 'approved' &&
-          previousStatus != 'approved' &&
-          providerId.isNotEmpty) {
-        tx.set(notificationRef, {
+      if (providerId.isNotEmpty && previousStatus != status) {
+        tx.set(providerNotificationRef, {
           'recipientId': providerId,
           'senderId': adminId,
-          'title': 'Service approved',
-          'body': 'Your service has been approved by admin.',
+          'title': 'Service moderation update',
+          'body': 'Your service "$title" is now "$status".',
           'type': 'service_moderation',
-          'data': {'serviceId': serviceId, 'status': 'approved'},
+          'data': {'serviceId': serviceId, 'status': status},
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
+
+      tx.set(adminNotificationRef, {
+        'recipientId': adminId,
+        'senderId': adminId,
+        'title': 'Moderation completed',
+        'body': 'Service "$title" was marked "$status".',
+        'type': 'admin_event',
+        'data': {'serviceId': serviceId, 'status': status},
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     });
   }
 }

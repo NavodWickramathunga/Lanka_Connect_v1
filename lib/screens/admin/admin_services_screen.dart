@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/service_moderation_service.dart';
@@ -55,10 +57,16 @@ class AdminServicesScreen extends StatelessWidget {
 
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) {
-          return const Center(child: Text('No pending services.'));
+          if (!kIsWeb) return const Center(child: Text('No pending services.'));
+          return const WebPageScaffold(
+            title: 'Moderation',
+            subtitle: 'Review and moderate pending service postings.',
+            useScaffold: false,
+            child: Center(child: Text('No pending services.')),
+          );
         }
 
-        return ListView.builder(
+        final list = ListView.builder(
           itemCount: docs.length,
           itemBuilder: (context, index) {
             final doc = docs[index];
@@ -86,6 +94,15 @@ class AdminServicesScreen extends StatelessWidget {
               ),
             );
           },
+        );
+
+        if (!kIsWeb) return list;
+
+        return WebPageScaffold(
+          title: 'Moderation',
+          subtitle: 'Review and moderate pending service postings.',
+          useScaffold: false,
+          child: list,
         );
       },
     );

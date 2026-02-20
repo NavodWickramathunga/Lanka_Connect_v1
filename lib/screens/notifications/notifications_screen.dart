@@ -1,8 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
+import '../../utils/notification_service.dart';
+import '../../utils/user_roles.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -26,58 +30,96 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      if (kIsWeb) {
+        return const WebPageScaffold(
+          title: 'Notifications',
+          subtitle: 'Stay updated with booking, service, and payment events.',
+          useScaffold: true,
+          child: Center(child: Text('Not signed in')),
+        );
+      }
       return const Scaffold(body: Center(child: Text('Not signed in')));
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirestoreRefs.notifications()
-            .where('recipientId', isEqualTo: user.uid)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    final body = StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirestoreRefs.users().doc(user.uid).snapshots(),
+        builder: (context, userSnapshot) {
+          final role = UserRoles.normalize(userSnapshot.data?.data()?['role']);
+          final includeAdminChannel = role == UserRoles.admin;
+          final recipientIds = includeAdminChannel
+              ? [user.uid, NotificationService.adminChannelRecipientId]
+              : [user.uid];
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(FirestoreErrorHandler.toUserMessage(snapshot.error!)),
-            );
-          }
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirestoreRefs.notifications()
+                .where('recipientId', whereIn: recipientIds)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          final docs = snapshot.data?.docs ?? [];
-          if (docs.isEmpty) {
-            return const Center(child: Text('No notifications yet.'));
-          }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(
+                    FirestoreErrorHandler.toUserMessage(snapshot.error!),
+                  ),
+                );
+              }
 
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data();
-              final title = (data['title'] ?? 'Notification').toString();
-              final body = (data['body'] ?? '').toString();
-              final isRead = (data['isRead'] ?? false) == true;
+              final docs = [...(snapshot.data?.docs ?? [])];
+              docs.sort((a, b) {
+                final aTs = a.data()['createdAt'] as Timestamp?;
+                final bTs = b.data()['createdAt'] as Timestamp?;
+                final aMs = aTs?.millisecondsSinceEpoch ?? 0;
+                final bMs = bTs?.millisecondsSinceEpoch ?? 0;
+                return bMs.compareTo(aMs);
+              });
+              if (docs.isEmpty) {
+                return const Center(child: Text('No notifications yet.'));
+              }
 
-              return ListTile(
-                leading: Icon(
-                  isRead ? Icons.notifications_none : Icons.notifications,
-                ),
-                title: Text(title),
-                subtitle: Text(body),
-                trailing: isRead
-                    ? null
-                    : TextButton(
-                        onPressed: () => _markRead(context, doc.id),
-                        child: const Text('Mark read'),
-                      ),
+              return ListView.builder(
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final doc = docs[index];
+                  final data = doc.data();
+                  final title = (data['title'] ?? 'Notification').toString();
+                  final body = (data['body'] ?? '').toString();
+                  final isRead = (data['isRead'] ?? false) == true;
+
+                  return ListTile(
+                    leading: Icon(
+                      isRead ? Icons.notifications_none : Icons.notifications,
+                    ),
+                    title: Text(title),
+                    subtitle: Text(body),
+                    trailing: isRead
+                        ? null
+                        : TextButton(
+                            onPressed: () => _markRead(context, doc.id),
+                            child: const Text('Mark read'),
+                          ),
+                  );
+                },
               );
             },
           );
         },
-      ),
+    );
+
+    if (kIsWeb) {
+      return WebPageScaffold(
+        title: 'Notifications',
+        subtitle: 'Stay updated with booking, service, and payment events.',
+        useScaffold: true,
+        child: body,
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Notifications')),
+      body: body,
     );
   }
 }

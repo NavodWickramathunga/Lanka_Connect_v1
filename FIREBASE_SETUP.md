@@ -53,7 +53,7 @@ cd ..
 ## 4) Deploy Firestore + Functions
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes,functions
+firebase deploy --only firestore:rules,firestore:indexes,storage:rules,functions
 ```
 
 ## 5) Run the App

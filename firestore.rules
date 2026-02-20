@@ -222,7 +222,13 @@ service cloud.firestore {
         && request.resource.data.body is string;
 
       allow update: if signedIn()
-        && resource.data.recipientId == request.auth.uid
+        && (
+          resource.data.recipientId == request.auth.uid ||
+          (
+            isAdmin() &&
+            resource.data.recipientId == '__admins__'
+          )
+        )
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['isRead', 'readAt'])
         && request.resource.data.isRead == true;
 

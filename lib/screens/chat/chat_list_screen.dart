@@ -1,6 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/mobile/mobile_components.dart';
+import '../../ui/mobile/mobile_page_scaffold.dart';
+import '../../ui/mobile/mobile_tokens.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/user_roles.dart';
 import 'chat_screen.dart';
@@ -43,10 +48,26 @@ class ChatListScreen extends StatelessWidget {
 
             final docs = bookingSnapshot.data?.docs ?? [];
             if (docs.isEmpty) {
-              return const Center(child: Text('No chats yet.'));
+              if (!kIsWeb) {
+                return MobilePageScaffold(
+                  title: 'Chats',
+                  subtitle: 'Messages from your active bookings',
+                  accentColor: RoleVisuals.forRole(role).accent,
+                  body: const MobileEmptyState(
+                    title: 'No chats yet.',
+                    icon: Icons.chat_bubble_outline,
+                  ),
+                );
+              }
+              return const WebPageScaffold(
+                title: 'Chats',
+                subtitle: 'Open booking conversations with seekers and providers.',
+                useScaffold: false,
+                child: Center(child: Text('No chats yet.')),
+              );
             }
 
-            return ListView.builder(
+            final list = ListView.builder(
               itemCount: docs.length,
               itemBuilder: (context, index) {
                 final doc = docs[index];
@@ -56,6 +77,14 @@ class ChatListScreen extends StatelessWidget {
                     ? doc.id.substring(0, _bookingIdDisplayLength)
                     : doc.id;
                 return ListTile(
+                  leading: MobileStatusChip(
+                    label: status,
+                    color: status == 'accepted'
+                        ? MobileTokens.secondary
+                        : status == 'completed'
+                        ? MobileTokens.primary
+                        : MobileTokens.accent,
+                  ),
                   title: Text('Booking $bookingId'),
                   subtitle: Text('Status: $status'),
                   trailing: const Icon(Icons.chat_bubble_outline),
@@ -66,6 +95,21 @@ class ChatListScreen extends StatelessWidget {
                   ),
                 );
               },
+            );
+
+            if (!kIsWeb) {
+              return MobilePageScaffold(
+                title: 'Chats',
+                subtitle: 'Messages from your active bookings',
+                accentColor: RoleVisuals.forRole(role).accent,
+                body: list,
+              );
+            }
+            return WebPageScaffold(
+              title: 'Chats',
+              subtitle: 'Open booking conversations with seekers and providers.',
+              useScaffold: false,
+              child: list,
             );
           },
         );

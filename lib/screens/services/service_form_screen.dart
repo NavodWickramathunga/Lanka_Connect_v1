@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/validators.dart';
@@ -115,106 +117,112 @@ class _ServiceFormScreenState extends State<ServiceFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Post Service')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Title'),
-                validator: (value) =>
-                    Validators.requiredField(value, 'Title required'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _categoryController,
-                decoration: const InputDecoration(labelText: 'Category'),
-                validator: (value) =>
-                    Validators.requiredField(value, 'Category required'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _priceController,
-                decoration: const InputDecoration(labelText: 'Price (LKR)'),
-                keyboardType: TextInputType.number,
-                validator: (value) =>
-                    Validators.priceField(value, 'Price required'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _districtController,
-                decoration: const InputDecoration(labelText: 'District'),
-                validator: (value) =>
-                    Validators.requiredField(value, 'District required'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _cityController,
-                decoration: const InputDecoration(labelText: 'City'),
-                validator: (value) =>
-                    Validators.requiredField(value, 'City required'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _latController,
-                      decoration: const InputDecoration(
-                        labelText: 'Latitude (optional)',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                        signed: true,
-                      ),
-                      validator: Validators.optionalLatitude,
+    final body = SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: 'Title'),
+              validator: (value) =>
+                  Validators.requiredField(value, 'Title required'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _categoryController,
+              decoration: const InputDecoration(labelText: 'Category'),
+              validator: (value) =>
+                  Validators.requiredField(value, 'Category required'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _priceController,
+              decoration: const InputDecoration(labelText: 'Price (LKR)'),
+              keyboardType: TextInputType.number,
+              validator: (value) => Validators.priceField(value, 'Price required'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _districtController,
+              decoration: const InputDecoration(labelText: 'District'),
+              validator: (value) =>
+                  Validators.requiredField(value, 'District required'),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _cityController,
+              decoration: const InputDecoration(labelText: 'City'),
+              validator: (value) => Validators.requiredField(value, 'City required'),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _latController,
+                    decoration: const InputDecoration(
+                      labelText: 'Latitude (optional)',
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _lngController,
-                      decoration: const InputDecoration(
-                        labelText: 'Longitude (optional)',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                        signed: true,
-                      ),
-                      validator: Validators.optionalLongitude,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
                     ),
+                    validator: Validators.optionalLatitude,
                   ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'If latitude/longitude are empty, map uses approximate city/district location.',
-                  style: TextStyle(fontSize: 12),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _lngController,
+                    decoration: const InputDecoration(
+                      labelText: 'Longitude (optional)',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    validator: Validators.optionalLongitude,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'If latitude/longitude are empty, map uses approximate city/district location.',
+                style: TextStyle(fontSize: 12),
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Description'),
-                maxLines: 3,
-                validator: (value) =>
-                    Validators.requiredField(value, 'Description required'),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Saving...' : 'Post Service'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(labelText: 'Description'),
+              maxLines: 3,
+              validator: (value) =>
+                  Validators.requiredField(value, 'Description required'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? 'Saving...' : 'Post Service'),
+            ),
+          ],
         ),
       ),
     );
+
+    if (kIsWeb) {
+      return WebPageScaffold(
+        title: 'Post Service',
+        subtitle: 'Create a new service listing for seekers to discover.',
+        useScaffold: true,
+        child: body,
+      );
+    }
+
+    return Scaffold(appBar: AppBar(title: const Text('Post Service')), body: body);
   }
 }

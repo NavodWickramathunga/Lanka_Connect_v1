@@ -5,6 +5,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:mime/mime.dart';
+import '../../ui/mobile/mobile_components.dart';
+import '../../ui/mobile/mobile_page_scaffold.dart';
+import '../../ui/mobile/mobile_tokens.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
@@ -133,11 +138,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .child(user.uid)
           .child('avatar.jpg');
 
+      final bytes = await picked.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        if (mounted) {
+          FirestoreErrorHandler.showError(
+            context,
+            'Image is too large. Please choose an image under 5 MB.',
+          );
+        }
+        return;
+      }
+
+      final mimeType = lookupMimeType(
+        picked.name,
+        headerBytes: bytes.take(12).toList(),
+      );
+      if (mimeType == null || !mimeType.startsWith('image/')) {
+        if (mounted) {
+          FirestoreErrorHandler.showError(
+            context,
+            'Please select a valid image file.',
+          );
+        }
+        return;
+      }
+
+      final metadata = SettableMetadata(contentType: mimeType);
+
       if (kIsWeb) {
-        final bytes = await picked.readAsBytes();
-        await ref.putData(bytes);
+        await ref.putData(bytes, metadata);
       } else {
-        await ref.putFile(File(picked.path));
+        await ref.putFile(File(picked.path), metadata);
       }
 
       final url = await ref.getDownloadURL();
@@ -157,9 +188,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         stackTrace: st,
       );
       if (mounted) {
+        final isStorageAuthIssue =
+            e.code == 'unauthorized' || e.code == 'permission-denied';
         FirestoreErrorHandler.showError(
           context,
-          FirestoreErrorHandler.toUserMessage(e),
+          isStorageAuthIssue
+              ? 'Image upload is blocked by storage rules. Ensure storage rules are deployed and your account is signed in.'
+              : FirestoreErrorHandler.toUserMessage(e),
         );
       }
     } catch (e, st) {
@@ -210,7 +245,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _initialized = true;
         }
 
-        return SingleChildScrollView(
+        final content = SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Form(
             key: _formKey,
@@ -237,45 +272,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                  validator: (value) =>
-                      Validators.requiredField(value, 'Name required'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _contactController,
-                  decoration: const InputDecoration(labelText: 'Contact'),
-                  validator: (value) => Validators.phoneField(value),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _districtController,
-                  decoration: const InputDecoration(labelText: 'District'),
-                  validator: (value) =>
-                      Validators.requiredField(value, 'District required'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _cityController,
-                  decoration: const InputDecoration(labelText: 'City'),
-                  validator: (value) =>
-                      Validators.requiredField(value, 'City required'),
+                MobileSectionCard(
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(labelText: 'Name'),
+                        validator: (value) =>
+                            Validators.requiredField(value, 'Name required'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _contactController,
+                        decoration: const InputDecoration(labelText: 'Contact'),
+                        validator: (value) => Validators.phoneField(value),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _districtController,
+                        decoration: const InputDecoration(labelText: 'District'),
+                        validator: (value) =>
+                            Validators.requiredField(value, 'District required'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _cityController,
+                        decoration: const InputDecoration(labelText: 'City'),
+                        validator: (value) =>
+                            Validators.requiredField(value, 'City required'),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 if (_role == UserRoles.provider) ...[
-                  TextFormField(
-                    controller: _skillsController,
-                    decoration: const InputDecoration(
-                      labelText: 'Skills / categories (comma separated)',
+                  MobileSectionCard(
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _skillsController,
+                          decoration: const InputDecoration(
+                            labelText: 'Skills / categories (comma separated)',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _bioController,
+                          decoration: const InputDecoration(labelText: 'Short bio'),
+                          maxLines: 3,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _bioController,
-                    decoration: const InputDecoration(labelText: 'Short bio'),
-                    maxLines: 3,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -286,6 +333,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
+        );
+
+        if (!kIsWeb) {
+          return MobilePageScaffold(
+            title: 'Profile',
+            subtitle: 'Manage your identity and account details',
+            accentColor: RoleVisuals.forRole(_role).accent,
+            body: content,
+          );
+        }
+
+        return WebPageScaffold(
+          title: 'Profile',
+          subtitle: 'Manage your identity and account information.',
+          useScaffold: false,
+          child: content,
         );
       },
     );

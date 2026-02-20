@@ -1,8 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import '../../ui/mobile/mobile_components.dart';
+import '../../ui/mobile/mobile_page_scaffold.dart';
+import '../../ui/mobile/mobile_tokens.dart';
+import '../../ui/web/web_page_scaffold.dart';
+import '../../ui/web/web_tokens.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/geo_utils.dart';
 import '../../utils/location_lookup.dart';
@@ -315,143 +321,29 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
         final userCity = (userData['city'] ?? '').toString().trim();
         _autoEnableNearMeIfNeeded(role);
 
-        return Column(
+        final content = Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _categoryController,
-                          decoration: const InputDecoration(
-                            labelText: 'Category',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _districtController,
-                          decoration: const InputDecoration(
-                            labelText: 'District',
-                          ),
-                        ),
-                      ),
-                    ],
+            if (kIsWeb)
+              Padding(
+                padding: const EdgeInsets.all(WebTokens.spacingMd),
+                child: Card(
+                  elevation: 0,
+                  color: WebTokens.surfaceMuted,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(WebTokens.radiusMd),
+                    side: const BorderSide(color: WebTokens.border),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _cityController,
-                          decoration: const InputDecoration(labelText: 'City'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Near me'),
-                          value: _nearMe,
-                          onChanged: _requestingLocation
-                              ? null
-                              : _handleNearMeToggle,
-                        ),
-                      ),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(WebTokens.spacingMd),
+                    child: _filters(),
                   ),
-                  if (_requestingLocation)
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Requesting current location...',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  if (_nearMeError != null)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        _nearMeError!,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  if (_nearMe)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<double>(
-                            value: _radiusKm,
-                            decoration: const InputDecoration(
-                              labelText: 'Radius',
-                            ),
-                            items: const [2.0, 5.0, 10.0, 25.0]
-                                .map(
-                                  (value) => DropdownMenuItem<double>(
-                                    value: value,
-                                    child: Text('${value.toInt()} km'),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() {
-                                _radiusKm = value;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            value: _onlyWithCoordinates,
-                            title: const Text('Coordinates only'),
-                            onChanged: (value) {
-                              setState(() {
-                                _onlyWithCoordinates = value ?? false;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _minPriceController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Min price',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _maxPriceController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Max price',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: _applyFilters,
-                        child: const Text('Filter'),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: MobileSectionCard(child: _filters()),
               ),
-            ),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _buildQuery(role, user.uid).snapshots(),
@@ -499,7 +391,13 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                         ),
                       );
                     }
-                    return const Center(child: Text('No services found.'));
+                    if (kIsWeb) {
+                      return const Center(child: Text('No services found.'));
+                    }
+                    return const MobileEmptyState(
+                      title: 'No services found.',
+                      icon: Icons.search_off,
+                    );
                   }
 
                   return Column(
@@ -523,33 +421,55 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                             final data = item.doc.data();
                             final point = item.point;
                             final distance = item.distanceKm;
-                            return Card(
+                            final status =
+                                (data['status'] ?? 'pending').toString();
+                            final onSurface = Theme.of(
+                              context,
+                            ).colorScheme.onSurface;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
                               margin: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 6,
                               ),
-                              child: Padding(
+                              child: Card(
+                                child: Padding(
                                 padding: const EdgeInsets.all(8),
                                 child: Column(
                                   children: [
                                     ListTile(
-                                      title: Text(data['title'] ?? 'Service'),
+                                      title: Text(
+                                        data['title'] ?? 'Service',
+                                        style: TextStyle(color: onSurface),
+                                      ),
                                       subtitle: Text(
                                         '${data['category'] ?? ''} | ${_displayLocation(data)} | LKR ${data['price'] ?? ''}',
+                                        style: TextStyle(
+                                          color: onSurface.withValues(
+                                            alpha: 0.75,
+                                          ),
+                                        ),
                                       ),
                                       trailing: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(
-                                            (data['status'] ?? 'pending')
-                                                .toString(),
+                                          MobileStatusChip(
+                                            label: status,
+                                            color: status == 'approved'
+                                                ? MobileTokens.secondary
+                                                : status == 'rejected'
+                                                ? Colors.red
+                                                : MobileTokens.accent,
                                           ),
                                           if (_nearMe)
                                             Text(
                                               distance != null
                                                   ? GeoUtils.formatKm(distance)
                                                   : 'Distance N/A',
-                                              style: const TextStyle(
+                                              style: TextStyle(
+                                                color: onSurface.withValues(
+                                                  alpha: 0.75,
+                                                ),
                                                 fontSize: 11,
                                               ),
                                             ),
@@ -596,6 +516,7 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                                   ],
                                 ),
                               ),
+                              ),
                             );
                           },
                         ),
@@ -607,7 +528,161 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
             ),
           ],
         );
+
+        if (!kIsWeb) {
+          final roleVisuals = RoleVisuals.forRole(role);
+          return MobilePageScaffold(
+            title: widget.showOnlyMine ? 'My Services' : 'Services',
+            subtitle: widget.showOnlyMine
+                ? 'Manage and track your service listings'
+                : 'Discover trusted local services near you',
+            accentColor: roleVisuals.accent,
+            body: content,
+          );
+        }
+
+        return WebPageScaffold(
+          title: widget.showOnlyMine ? 'My Services' : 'Service Marketplace',
+          subtitle: widget.showOnlyMine
+              ? 'Manage and review your posted services.'
+              : 'Find and filter services across districts and cities.',
+          useScaffold: false,
+          child: content,
+        );
       },
+    );
+  }
+
+  Widget _filters() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _categoryController,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _districtController,
+                decoration: const InputDecoration(
+                  labelText: 'District',
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _cityController,
+                decoration: const InputDecoration(labelText: 'City'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Near me'),
+                value: _nearMe,
+                onChanged: _requestingLocation ? null : _handleNearMeToggle,
+              ),
+            ),
+          ],
+        ),
+        if (_requestingLocation)
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Requesting current location...',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        if (_nearMeError != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _nearMeError!,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        if (_nearMe)
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<double>(
+                  initialValue: _radiusKm,
+                  decoration: const InputDecoration(
+                    labelText: 'Radius',
+                  ),
+                  items: const [2.0, 5.0, 10.0, 25.0]
+                      .map(
+                        (value) => DropdownMenuItem<double>(
+                          value: value,
+                          child: Text('${value.toInt()} km'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _radiusKm = value;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _onlyWithCoordinates,
+                  title: const Text('Coordinates only'),
+                  onChanged: (value) {
+                    setState(() {
+                      _onlyWithCoordinates = value ?? false;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _minPriceController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Min price',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _maxPriceController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Max price',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: _applyFilters,
+              child: const Text('Filter'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

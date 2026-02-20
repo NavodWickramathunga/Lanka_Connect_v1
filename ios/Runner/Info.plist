@@ -47,5 +47,9 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We use your location to find nearby service providers.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need photo access so you can upload profile images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need photo library access for profile image uploads.</string>
 </dict>
 </plist>

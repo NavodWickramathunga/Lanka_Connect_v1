@@ -2,6 +2,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class FirestoreErrorHandler {
+  static String toUserMessageForOperation(Object error, {String? operation}) {
+    if (operation == 'seed_demo_data') {
+      if (error is FirebaseException && error.code == 'permission-denied') {
+        return 'Demo seed blocked by rules for existing demo docs. Seed now runs in safe mode; retry once. If it still fails, use fresh demo IDs.';
+      }
+      if (error is FirebaseException && error.message != null) {
+        return 'Demo seed failed: ${error.message}';
+      }
+      return 'Demo seed failed: $error';
+    }
+    return toUserMessage(error);
+  }
+
   static String toUserMessage(Object error) {
     if (error is FirebaseAuthException) {
       return error.message ?? 'Authentication failed. Please try again.';
@@ -12,7 +25,7 @@ class FirestoreErrorHandler {
         case 'not-found':
           return 'Requested record was not found.';
         case 'permission-denied':
-          return 'Permission denied. Please sign in and try again.';
+          return 'Permission denied. Your account does not have access for this action.';
         case 'unauthenticated':
           return 'Please sign in to continue.';
         case 'unavailable':

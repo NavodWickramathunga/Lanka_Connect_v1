@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/mobile/mobile_page_scaffold.dart';
+import '../../ui/mobile/mobile_tokens.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
 
@@ -87,20 +91,45 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('Not signed in')));
+      if (kIsWeb) {
+        return const WebPageScaffold(
+          title: 'Chat',
+          subtitle: 'Send and receive booking messages in real time.',
+          useScaffold: true,
+          child: Center(child: Text('Not signed in')),
+        );
+      }
+      return const MobilePageScaffold(
+        title: 'Chat',
+        subtitle: 'Send and receive booking messages in real time.',
+        accentColor: MobileTokens.accent,
+        useScaffold: true,
+        body: Center(child: Text('Not signed in')),
+      );
     }
     if (_chatId.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Chat')),
-        body: const Center(
+      if (kIsWeb) {
+        return const WebPageScaffold(
+          title: 'Chat',
+          subtitle: 'Send and receive booking messages in real time.',
+          useScaffold: true,
+          child: Center(
+            child: Text('Invalid chat reference. Open chat again from bookings.'),
+          ),
+        );
+      }
+      return const MobilePageScaffold(
+        title: 'Chat',
+        subtitle: 'Send and receive booking messages in real time.',
+        accentColor: MobileTokens.accent,
+        useScaffold: true,
+        body: Center(
           child: Text('Invalid chat reference. Open chat again from bookings.'),
         ),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Chat')),
-      body: Column(
+    final body = Column(
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -143,8 +172,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: isMine
-                              ? Colors.blue.shade100
-                              : Colors.grey.shade200,
+                              ? const Color(0xFFDDEBFF)
+                              : const Color(0xFFF2F6FB),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(data['text'] ?? ''),
@@ -179,7 +208,23 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ],
-      ),
+    );
+
+    if (kIsWeb) {
+      return WebPageScaffold(
+        title: 'Chat',
+        subtitle: 'Send and receive booking messages in real time.',
+        useScaffold: true,
+        child: body,
+      );
+    }
+
+    return MobilePageScaffold(
+      title: 'Chat',
+      subtitle: 'Send and receive booking messages in real time.',
+      accentColor: MobileTokens.accent,
+      useScaffold: true,
+      body: body,
     );
   }
 }

@@ -1,6 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/mobile/mobile_components.dart';
+import '../../ui/mobile/mobile_page_scaffold.dart';
+import '../../ui/mobile/mobile_tokens.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/geo_utils.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
@@ -13,6 +18,29 @@ class ServiceDetailScreen extends StatelessWidget {
   const ServiceDetailScreen({super.key, required this.serviceId});
 
   final String serviceId;
+
+  Widget _servicePage({
+    required BuildContext context,
+    required String title,
+    required Widget body,
+    Color accentColor = MobileTokens.primary,
+  }) {
+    if (kIsWeb) {
+      return WebPageScaffold(
+        title: title,
+        subtitle: 'Detailed service information and actions.',
+        useScaffold: true,
+        child: body,
+      );
+    }
+    return MobilePageScaffold(
+      title: title,
+      subtitle: 'Detailed service information and actions.',
+      accentColor: accentColor,
+      useScaffold: true,
+      body: body,
+    );
+  }
 
   Future<void> _createBooking(
     BuildContext context,
@@ -28,7 +56,7 @@ class ServiceDetailScreen extends StatelessWidget {
     }
 
     try {
-      await FirestoreRefs.bookings().add({
+      final bookingRef = await FirestoreRefs.bookings().add({
         'serviceId': serviceId,
         'providerId': providerId,
         'seekerId': user.uid,
@@ -37,12 +65,29 @@ class ServiceDetailScreen extends StatelessWidget {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      await NotificationService.create(
-        recipientId: providerId,
-        title: 'New booking request',
-        body: 'A seeker requested booking for "$serviceTitle".',
+      await NotificationService.createMany(
+        recipientIds: [providerId, user.uid],
+        title: 'Booking request created',
+        body: 'Booking request for "$serviceTitle" is pending provider action.',
         type: 'booking',
-        data: {'serviceId': serviceId, 'seekerId': user.uid},
+        data: {
+          'bookingId': bookingRef.id,
+          'serviceId': serviceId,
+          'providerId': providerId,
+          'seekerId': user.uid,
+          'status': 'pending',
+        },
+      );
+      await NotificationService.notifyAdmins(
+        title: 'New booking request',
+        body: 'A new booking request was created for "$serviceTitle".',
+        data: {
+          'bookingId': bookingRef.id,
+          'serviceId': serviceId,
+          'providerId': providerId,
+          'seekerId': user.uid,
+          'status': 'pending',
+        },
       );
 
       ScaffoldMessenger.of(
@@ -94,7 +139,7 @@ class ServiceDetailScreen extends StatelessWidget {
     }
 
     try {
-      await FirestoreRefs.requests().add({
+      final requestRef = await FirestoreRefs.requests().add({
         'serviceId': serviceId,
         'providerId': providerId,
         'seekerId': user.uid,
@@ -102,12 +147,29 @@ class ServiceDetailScreen extends StatelessWidget {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      await NotificationService.create(
-        recipientId: providerId,
-        title: 'New service request',
-        body: 'A seeker created a request for "$serviceTitle".',
+      await NotificationService.createMany(
+        recipientIds: [providerId, user.uid],
+        title: 'Service request created',
+        body: 'A request for "$serviceTitle" is now pending provider action.',
         type: 'request',
-        data: {'serviceId': serviceId, 'seekerId': user.uid},
+        data: {
+          'requestId': requestRef.id,
+          'serviceId': serviceId,
+          'providerId': providerId,
+          'seekerId': user.uid,
+          'status': 'pending',
+        },
+      );
+      await NotificationService.notifyAdmins(
+        title: 'New service request',
+        body: 'A new service request was created for "$serviceTitle".',
+        data: {
+          'requestId': requestRef.id,
+          'serviceId': serviceId,
+          'providerId': providerId,
+          'seekerId': user.uid,
+          'status': 'pending',
+        },
       );
 
       ScaffoldMessenger.of(
@@ -150,6 +212,14 @@ class ServiceDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      if (kIsWeb) {
+        return const WebPageScaffold(
+          title: 'Service',
+          subtitle: 'Detailed service information and actions.',
+          useScaffold: true,
+          child: Center(child: Text('Not signed in')),
+        );
+      }
       return const Scaffold(body: Center(child: Text('Not signed in')));
     }
 
@@ -157,25 +227,27 @@ class ServiceDetailScreen extends StatelessWidget {
       stream: FirestoreRefs.services().doc(serviceId).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Service')),
+          return _servicePage(
+            context: context,
+            title: 'Service',
             body: Center(
-              child: Text(
-                FirestoreErrorHandler.toUserMessage(snapshot.error!),
-              ),
+              child: Text(FirestoreErrorHandler.toUserMessage(snapshot.error!)),
             ),
           );
         }
         if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return _servicePage(
+            context: context,
+            title: 'Service',
+            body: const Center(child: CircularProgressIndicator()),
           );
         }
 
         final data = snapshot.data!.data();
         if (data == null) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Service')),
+          return _servicePage(
+            context: context,
+            title: 'Service',
             body: const Center(child: Text('Service not found.')),
           );
         }
@@ -187,20 +259,42 @@ class ServiceDetailScreen extends StatelessWidget {
             : (data['location'] ?? '').toString();
         final point = GeoUtils.extractPoint(data);
 
-        return Scaffold(
-          appBar: AppBar(title: Text(data['title'] ?? 'Service')),
+        return _servicePage(
+          context: context,
+          title: (data['title'] ?? 'Service').toString(),
+          accentColor: MobileTokens.accent,
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  data['category'] ?? '',
-                  style: Theme.of(context).textTheme.titleMedium,
+                MobileSectionCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          MobileStatusChip(
+                            label: (data['status'] ?? 'pending').toString(),
+                            color: (data['status'] ?? '') == 'approved'
+                                ? MobileTokens.secondary
+                                : MobileTokens.accent,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              data['category'] ?? '',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text('Location: $location'),
+                      Text('Price: LKR ${data['price'] ?? ''}'),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Text('Location: $location'),
-                Text('Price: LKR ${data['price'] ?? ''}'),
                 if (point != null) ...[
                   const SizedBox(height: 12),
                   ServiceMapPreview(
@@ -227,7 +321,9 @@ class ServiceDetailScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 12),
-                Text(data['description'] ?? ''),
+                MobileSectionCard(
+                  child: Text(data['description'] ?? ''),
+                ),
                 const SizedBox(height: 16),
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: FirestoreRefs.reviews()

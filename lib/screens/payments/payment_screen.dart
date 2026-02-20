@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../ui/web/web_page_scaffold.dart';
 import '../../utils/firestore_error_handler.dart';
 import '../../utils/firestore_refs.dart';
 import '../../utils/notification_service.dart';
@@ -53,22 +55,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      await NotificationService.create(
-        recipientId: providerId,
-        title: status == 'success'
-            ? 'Payment received'
-            : 'Payment attempt failed',
+      await NotificationService.createMany(
+        recipientIds: [providerId, seekerId],
+        title: status == 'success' ? 'Payment success' : 'Payment failed',
         body: 'Booking ${_shortId(widget.bookingId)} payment status: $status.',
         type: 'payment',
-        data: {'bookingId': widget.bookingId, 'status': status},
+        data: {
+          'bookingId': widget.bookingId,
+          'status': status,
+          'providerId': providerId,
+          'seekerId': seekerId,
+        },
       );
 
-      await NotificationService.create(
-        recipientId: seekerId,
-        title: status == 'success' ? 'Payment success' : 'Payment failed',
-        body: 'Demo payment completed with status: $status.',
+      await NotificationService.notifyAdmins(
+        title: 'Payment update',
+        body: 'Booking ${_shortId(widget.bookingId)} payment status: $status.',
         type: 'payment',
-        data: {'bookingId': widget.bookingId, 'status': status},
+        data: {
+          'bookingId': widget.bookingId,
+          'status': status,
+          'providerId': providerId,
+          'seekerId': seekerId,
+        },
       );
 
       if (mounted) {
@@ -115,12 +124,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      if (kIsWeb) {
+        return const WebPageScaffold(
+          title: 'Payment (Demo)',
+          subtitle: 'Simulate payment outcomes for accepted bookings.',
+          useScaffold: true,
+          child: Center(child: Text('Not signed in')),
+        );
+      }
       return const Scaffold(body: Center(child: Text('Not signed in')));
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Payment (Demo)')),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    final body = StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirestoreRefs.bookings().doc(widget.bookingId).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -195,7 +210,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
           );
         },
-      ),
     );
+
+    if (kIsWeb) {
+      return WebPageScaffold(
+        title: 'Payment (Demo)',
+        subtitle: 'Simulate payment outcomes for accepted bookings.',
+        useScaffold: true,
+        child: body,
+      );
+    }
+
+    return Scaffold(appBar: AppBar(title: const Text('Payment (Demo)')), body: body);
   }
 }
