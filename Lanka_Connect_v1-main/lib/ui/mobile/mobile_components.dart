@@ -1,0 +1,245 @@
+import 'package:flutter/material.dart';
+import 'mobile_tokens.dart';
+
+class MobileGradientHeader extends StatelessWidget {
+  const MobileGradientHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    required this.accentColor,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Color accentColor;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(MobileTokens.spacingLg),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(MobileTokens.radiusXl),
+        gradient: LinearGradient(
+          colors: isDark
+              ? [accentColor.withValues(alpha: 0.8), MobileTokens.backgroundDark]
+              : [accentColor, MobileTokens.primary],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.2),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle!,
+                    style: const TextStyle(color: Color(0xFFE9F3FF)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
+    );
+  }
+}
+
+class MobileSectionCard extends StatelessWidget {
+  const MobileSectionCard({super.key, required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: 0.06),
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(MobileTokens.spacingLg),
+        child: child,
+      ),
+    );
+  }
+}
+
+class MobilePageIntro extends StatelessWidget {
+  const MobilePageIntro({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.action,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        MobileTokens.spacingMd,
+        MobileTokens.spacingXs,
+        MobileTokens.spacingMd,
+        MobileTokens.spacingMd,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MobileTokens.inkMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(width: MobileTokens.spacingSm),
+            action!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class MobileStatusChip extends StatelessWidget {
+  const MobileStatusChip({super.key, required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class MobileEmptyState extends StatelessWidget {
+  const MobileEmptyState({super.key, required this.title, required this.icon});
+
+  final String title;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return MobileStatePanel(
+      icon: icon,
+      title: title,
+      tone: MobileStateTone.muted,
+    );
+  }
+}
+
+enum MobileStateTone { muted, info, error }
+
+class MobileStatePanel extends StatelessWidget {
+  const MobileStatePanel({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.tone = MobileStateTone.muted,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final MobileStateTone tone;
+  final Widget? action;
+
+  Color _toneColor() {
+    switch (tone) {
+      case MobileStateTone.info:
+        return MobileTokens.primary;
+      case MobileStateTone.error:
+        return Colors.red;
+      case MobileStateTone.muted:
+        return MobileTokens.inkMuted;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _toneColor();
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(MobileTokens.spacingMd),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 44, color: color),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+            if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: MobileTokens.inkMuted),
+              ),
+            ],
+            if (action != null) ...[
+              const SizedBox(height: 12),
+              action!,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
