@@ -1,12 +1,12 @@
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
 param(
   [Parameter(Mandatory = $true)]
   [string]$DeviceId,
   [string]$TestPath = "integration_test\notifications_query_test.dart",
   [string]$EmulatorHost = ""
 )
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
 $args = @(
   "test",

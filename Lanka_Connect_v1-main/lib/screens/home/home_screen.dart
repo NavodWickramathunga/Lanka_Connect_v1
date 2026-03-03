@@ -21,6 +21,7 @@ import '../chat/chat_list_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../provider/provider_dashboard_screen.dart';
+import '../provider/provider_services_screen.dart';
 import '../requests/request_list_screen.dart';
 import '../requests/seeker_request_list_screen.dart';
 import '../services/service_list_screen.dart';
@@ -162,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (role == UserRoles.provider) {
       return const {
         'dashboard': ProviderDashboardScreen(),
-        'my-services': ServiceListScreen(showOnlyMine: true),
+        'my-services': ProviderServicesScreen(),
         'requests': RequestListScreen(),
         'bookings': BookingListScreen(),
         'chat': ChatListScreen(),

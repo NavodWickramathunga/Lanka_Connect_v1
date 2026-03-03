@@ -9,6 +9,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'screens/auth/auth_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/permissions/required_permissions_screen.dart';
+import 'screens/splash/startup_splash_screen.dart';
 import 'ui/mobile/mobile_theme.dart';
 import 'ui/theme/app_theme_controller.dart';
 import 'firebase_options.dart';
@@ -73,10 +74,36 @@ class MyApp extends StatelessWidget {
           theme: MobileTheme.build(),
           darkTheme: MobileTheme.buildDark(),
           themeMode: mode,
-          home: const RequiredPermissionsScreen(child: AuthGate()),
+          home: const StartupFlowGate(),
         );
       },
     );
+  }
+}
+
+class StartupFlowGate extends StatefulWidget {
+  const StartupFlowGate({super.key});
+
+  @override
+  State<StartupFlowGate> createState() => _StartupFlowGateState();
+}
+
+class _StartupFlowGateState extends State<StartupFlowGate> {
+  bool _showSplash = true;
+
+  void _finishSplash() {
+    if (!mounted) return;
+    setState(() {
+      _showSplash = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showSplash) {
+      return StartupSplashScreen(onFinished: _finishSplash);
+    }
+    return const RequiredPermissionsScreen(child: AuthGate());
   }
 }
 

@@ -1,19 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:lanka_connect/firebase_options.dart';
+import 'helpers/firebase_emulator_test_bootstrap.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('notification query orders by createdAt desc', (tester) async {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    await _connectEmulators();
+    await initializeFirebaseForIntegrationTests();
+    await connectToEmulators();
 
     final suffix = DateTime.now().millisecondsSinceEpoch.toString();
     final email = 'notify_$suffix@example.com';
@@ -67,27 +63,4 @@ void main() {
     expect(query.docs.length, 2);
     expect(query.docs.first.data()['title'], 'Two');
   });
-}
-
-Future<void> _connectEmulators() async {
-  const useEmulators = bool.fromEnvironment(
-    'USE_FIREBASE_EMULATORS',
-    defaultValue: true,
-  );
-  if (!useEmulators) return;
-
-  final host = _host();
-  await FirebaseAuth.instance.useAuthEmulator(host, 9099);
-  FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
-}
-
-String _host() {
-  const hostOverride = String.fromEnvironment(
-    'FIREBASE_EMULATOR_HOST',
-    defaultValue: '',
-  );
-  if (hostOverride.trim().isNotEmpty) return hostOverride.trim();
-  if (kIsWeb) return 'localhost';
-  if (defaultTargetPlatform == TargetPlatform.android) return '10.0.2.2';
-  return 'localhost';
 }

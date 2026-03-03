@@ -6,6 +6,7 @@ import '../../screens/chat/chat_list_screen.dart';
 import '../../screens/home/seeker_home_screen.dart';
 import '../../screens/profile/profile_screen.dart';
 import '../../screens/provider/provider_dashboard_screen.dart';
+import '../../screens/provider/provider_services_screen.dart';
 import '../../screens/requests/request_list_screen.dart';
 import '../../screens/requests/seeker_request_list_screen.dart';
 import '../../screens/services/service_list_screen.dart';
@@ -75,7 +76,7 @@ class MobileRoutes {
           id: MobileAppRouteId.services,
           label: 'My Services',
           icon: Icons.store,
-          builder: (_) => const ServiceListScreen(showOnlyMine: true),
+          builder: (_) => const ProviderServicesScreen(),
         ),
         MobileRouteSpec(
           id: MobileAppRouteId.requests,
