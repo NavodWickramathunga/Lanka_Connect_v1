@@ -352,6 +352,12 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /banners/{bannerId} {
+      // All signed-in users (including guests) can read active banners
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
