@@ -58,35 +58,37 @@ class _StartupSplashScreenState extends State<StartupSplashScreen>
             child: Transform.scale(scale: _posterScale.value, child: child),
           );
         },
-        child: Image.asset(
-          'assets/branding/splash_background.png',
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-          errorBuilder: (context, error, stackTrace) {
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFF05606A), Color(0xFF033B42)],
+        child: SizedBox.expand(
+          child: Image.asset(
+            'assets/branding/splash_background.png',
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            errorBuilder: (context, error, stackTrace) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF05606A), Color(0xFF033B42)],
+                      ),
                     ),
                   ),
-                ),
-                Center(
-                  child: Image.asset(
-                    'assets/branding/app_icon.png',
-                    width: 220,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const SizedBox.shrink(),
+                  Center(
+                    child: Image.asset(
+                      'assets/branding/app_icon.png',
+                      width: 220,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox.shrink(),
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

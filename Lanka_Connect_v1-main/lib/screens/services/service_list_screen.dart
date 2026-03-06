@@ -156,7 +156,7 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
     if (widget.showOnlyMine) {
       query = query.where('providerId', isEqualTo: userId);
     } else if (role == UserRoles.seeker || role == UserRoles.guest) {
-      query = query.where('status', isEqualTo: 'approved');
+      query = query.where('status', whereIn: const ['approved', 'active']);
     }
 
     query = query.limit(_currentLimit);
@@ -605,28 +605,20 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                 if (items.isEmpty) {
                   if (index == cursor) {
                     if (_nearMe) {
-                      return Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('No nearby services found.'),
-                            const SizedBox(height: 8),
-                            Text('Current radius: ${_radiusKm.toInt()} km'),
-                            const SizedBox(height: 12),
-                            ElevatedButton(
-                              onPressed: _expandRadius,
-                              child: const Text('Expand radius'),
-                            ),
-                            if (_radiusKm >= _maxRadiusKm) ...[
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Maximum radius reached. Try district/city filters.',
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ],
-                        ),
+                      return MobileStatePanel(
+                        icon: Icons.location_off_outlined,
+                        title: 'No nearby services found',
+                        subtitle: _radiusKm >= _maxRadiusKm
+                            ? 'Maximum radius reached.\nTry district/city filters.'
+                            : 'Current radius: ${_radiusKm.toInt()} km',
+                        tone: MobileStateTone.muted,
+                        action: _radiusKm < _maxRadiusKm
+                            ? ElevatedButton.icon(
+                                onPressed: _expandRadius,
+                                icon: const Icon(Icons.open_in_full, size: 16),
+                                label: const Text('Expand radius'),
+                              )
+                            : null,
                       );
                     }
                     if (kIsWeb) {
@@ -731,44 +723,93 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                               );
                             },
                           ),
-                          ListTile(
-                            title: Text(
-                              data['title'] ?? 'Service',
-                              style: TextStyle(color: onSurface),
-                            ),
-                            subtitle: Text(
-                              '${data['category'] ?? ''} | ${_displayLocation(data)} | LKR ${data['price'] ?? ''}',
-                              style: TextStyle(
-                                color: onSurface.withValues(alpha: 0.75),
-                              ),
-                            ),
-                            trailing: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                MobileStatusChip(
-                                  label: status,
-                                  color: status == 'approved'
-                                      ? MobileTokens.secondary
-                                      : status == 'rejected'
-                                      ? Colors.red
-                                      : MobileTokens.accent,
-                                ),
-                                if (_nearMe)
-                                  Text(
-                                    distance != null
-                                        ? GeoUtils.formatKm(distance)
-                                        : 'Distance N/A',
-                                    style: TextStyle(
-                                      color: onSurface.withValues(alpha: 0.75),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                              ],
-                            ),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(10),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) =>
                                     ServiceDetailScreen(serviceId: item.doc.id),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          (data['title'] ?? 'Service')
+                                              .toString(),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: onSurface,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.25,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      MobileStatusChip(
+                                        label: status,
+                                        color: status == 'approved'
+                                            ? MobileTokens.secondary
+                                            : status == 'rejected'
+                                            ? Colors.red
+                                            : MobileTokens.accent,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      if ((data['category'] ?? '')
+                                          .toString()
+                                          .trim()
+                                          .isNotEmpty)
+                                        _metaChip(
+                                          context,
+                                          Icons.category_outlined,
+                                          (data['category'] ?? '').toString(),
+                                        ),
+                                      if (_displayLocation(
+                                        data,
+                                      ).trim().isNotEmpty)
+                                        _metaChip(
+                                          context,
+                                          Icons.location_on_outlined,
+                                          _displayLocation(data),
+                                        ),
+                                      _metaChip(
+                                        context,
+                                        Icons.payments_outlined,
+                                        'LKR ${data['price'] ?? ''}',
+                                      ),
+                                    ],
+                                  ),
+                                  if (_nearMe) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      distance != null
+                                          ? 'Distance: ${GeoUtils.formatKm(distance)}'
+                                          : 'Distance: N/A',
+                                      style: TextStyle(
+                                        color: onSurface.withValues(
+                                          alpha: 0.75,
+                                        ),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ),
@@ -820,6 +861,7 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                 ? 'Manage and track your service listings'
                 : 'Discover trusted local services near you',
             accentColor: roleVisuals.accent,
+            useScaffold: true,
             body: content,
           );
         }
@@ -1056,6 +1098,33 @@ class _ServiceListScreenState extends State<ServiceListScreen> {
                 child: const Text('Filter'),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metaChip(BuildContext context, IconData icon, String label) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),

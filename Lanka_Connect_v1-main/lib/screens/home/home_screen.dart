@@ -402,6 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final selectedIndex = _currentIndex.clamp(0, mobileRoutes.length - 1);
         final webRouteMap = _webRouteMapForRole(role);
         final webNavItems = _webNavItemsForRole(role);
+        final backendLabel = FirebaseEnv.backendLabel();
 
         if (_webRouteId == null || !webRouteMap.containsKey(_webRouteId)) {
           _webRouteId = webNavItems.first.id;
@@ -413,7 +414,6 @@ class _HomeScreenState extends State<HomeScreen> {
           final routeLabel = webNavItems
               .firstWhere((item) => item.id == routeId)
               .label;
-          final backendLabel = FirebaseEnv.backendLabel();
           final subtitleParts = <String>[
             _roleLabel(role),
             if (user.email != null) user.email!,
@@ -491,6 +491,33 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             actions: [
+              if (backendLabel.isNotEmpty)
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: DesignTokens.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: DesignTokens.brandPrimary.withValues(
+                          alpha: 0.35,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      backendLabel,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: DesignTokens.brandPrimary,
+                      ),
+                    ),
+                  ),
+                ),
               ValueListenableBuilder<ThemeMode>(
                 valueListenable: AppThemeController.themeMode,
                 builder: (context, mode, _) {

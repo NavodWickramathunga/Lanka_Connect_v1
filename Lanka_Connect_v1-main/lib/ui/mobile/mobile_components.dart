@@ -22,6 +22,9 @@ class MobileGradientHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final width = MediaQuery.sizeOf(context).width;
+    final titleSize = width < 360 ? 22.0 : (width < 420 ? 24.0 : 26.0);
+    final subtitleSize = width < 360 ? 12.0 : 13.0;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(MobileTokens.spacingLg),
@@ -65,16 +68,20 @@ class MobileGradientHeader extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
+                    fontSize: titleSize,
                   ),
                 ),
                 if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
                     subtitle!,
-                    style: const TextStyle(color: Color(0xFFE9F3FF)),
+                    style: TextStyle(
+                      color: const Color(0xFFE9F3FF),
+                      fontSize: subtitleSize,
+                    ),
                   ),
                 ],
               ],

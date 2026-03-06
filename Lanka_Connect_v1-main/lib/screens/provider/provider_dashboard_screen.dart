@@ -419,21 +419,35 @@ class _PaymentOverview extends StatelessWidget {
         final docs = snapshot.data?.docs ?? [];
         double totalEarnings = 0;
         double pendingPayments = 0;
+        double totalDiscountGiven = 0;
         int successCount = 0;
 
         for (final doc in docs) {
           final data = doc.data();
-          final amount = (data['amount'] is num)
-              ? (data['amount'] as num).toDouble()
+          final gross = (data['grossAmount'] is num)
+              ? (data['grossAmount'] as num).toDouble()
+              : ((data['amount'] is num)
+                    ? (data['amount'] as num).toDouble()
+                    : 0.0);
+          final discount = (data['discountAmount'] is num)
+              ? (data['discountAmount'] as num).toDouble()
               : 0.0;
+          final net = (data['netAmount'] is num)
+              ? (data['netAmount'] as num).toDouble()
+              : ((data['amount'] is num)
+                    ? (data['amount'] as num).toDouble()
+                    : (gross - discount));
           final status = (data['status'] ?? '').toString().toLowerCase();
           if (status == 'success' ||
               status == 'completed' ||
               status == 'paid') {
-            totalEarnings += amount;
+            totalEarnings += net;
+            totalDiscountGiven += discount;
             successCount++;
-          } else if (status == 'pending') {
-            pendingPayments += amount;
+          } else if (status == 'pending' ||
+              status == 'pending_gateway' ||
+              status == 'pending_verification') {
+            pendingPayments += net;
           }
         }
 
@@ -459,6 +473,13 @@ class _PaymentOverview extends StatelessWidget {
                   label: 'Pending',
                   value: 'LKR ${pendingPayments.toStringAsFixed(2)}',
                   color: const Color(0xFFF59E0B),
+                ),
+                const Divider(height: 20),
+                _PaymentRow(
+                  icon: Icons.local_offer,
+                  label: 'Discounts Applied',
+                  value: 'LKR ${totalDiscountGiven.toStringAsFixed(2)}',
+                  color: const Color(0xFF7C3AED),
                 ),
                 const Divider(height: 20),
                 _PaymentRow(

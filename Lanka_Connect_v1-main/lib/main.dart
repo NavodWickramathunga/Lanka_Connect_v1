@@ -44,9 +44,13 @@ void main() async {
     final mapsImplementation = GoogleMapsFlutterPlatform.instance;
     if (mapsImplementation is GoogleMapsFlutterAndroid) {
       mapsImplementation.useAndroidViewSurface = true;
-      await GoogleMapsFlutterAndroid().initializeWithRenderer(
-        AndroidMapRenderer.latest,
-      );
+      try {
+        await mapsImplementation.initializeWithRenderer(
+          AndroidMapRenderer.latest,
+        );
+      } catch (error) {
+        debugPrint('Google Maps renderer init failed: $error');
+      }
     }
   }
 
@@ -121,17 +125,47 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
     _linkSub = appLinks.uriLinkStream.listen(_handleDeepLink);
   }
 
-  void _handleDeepLink(Uri uri) {
-    if (uri.path == AppNavigationContract.resetPasswordPath) {
-      final oobCode = uri.queryParameters['oobCode'] ?? '';
-      final nav = MyApp.navigatorKey.currentState;
-      if (nav != null) {
-        nav.push(
-          MaterialPageRoute(
-            builder: (_) => ResetPasswordScreen(initialOobCode: oobCode),
-          ),
-        );
+  Uri? _extractResetUri(Uri uri) {
+    final visited = <String>{};
+    Uri? current = uri;
+
+    while (current != null && visited.add(current.toString())) {
+      final path = current.path.toLowerCase();
+      final mode = (current.queryParameters['mode'] ?? '').toLowerCase();
+      final hasResetPath =
+          path == AppNavigationContract.resetPasswordPath ||
+          path.endsWith(AppNavigationContract.resetPasswordPath) ||
+          path.endsWith('/__/auth/action');
+      final hasResetMode = mode == 'resetpassword';
+      if (hasResetPath || hasResetMode) {
+        return current;
       }
+
+      final nested = current.queryParameters['link'] ??
+          current.queryParameters['continueUrl'] ??
+          current.queryParameters['deep_link_id'];
+      if (nested == null || nested.trim().isEmpty) {
+        current = null;
+      } else {
+        current = Uri.tryParse(Uri.decodeFull(nested.trim()));
+      }
+    }
+
+    return null;
+  }
+
+  void _handleDeepLink(Uri uri) {
+    final resetUri = _extractResetUri(uri);
+    if (resetUri == null) return;
+
+    final oobCode = (resetUri.queryParameters['oobCode'] ?? '').trim();
+    final nav = MyApp.navigatorKey.currentState;
+    if (nav != null) {
+      nav.push(
+        MaterialPageRoute(
+          builder: (_) => ResetPasswordScreen(initialOobCode: oobCode),
+        ),
+      );
     }
   }
 
@@ -144,10 +178,10 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
-      final uri = Uri.base;
-      if (uri.path == AppNavigationContract.resetPasswordPath) {
+      final resetUri = _extractResetUri(Uri.base);
+      if (resetUri != null) {
         return ResetPasswordScreen(
-          initialOobCode: uri.queryParameters['oobCode'] ?? '',
+          initialOobCode: resetUri.queryParameters['oobCode'] ?? '',
         );
       }
     }

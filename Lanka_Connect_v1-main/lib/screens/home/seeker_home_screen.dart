@@ -76,7 +76,7 @@ class _SeekerHomeScreenState extends State<SeekerHomeScreen> {
 
   Query<Map<String, dynamic>> _buildServiceQuery() {
     Query<Map<String, dynamic>> query = FirestoreRefs.services()
-        .where('status', isEqualTo: 'approved')
+        .where('status', whereIn: const ['approved', 'active'])
         .limit(20);
     return query;
   }
@@ -181,21 +181,30 @@ class _SeekerHomeScreenState extends State<SeekerHomeScreen> {
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: BannerCarousel(
-                onCtaTap: (index) {
-                  // 0 = Spring Cleaning, 1 = Emergency Plumbing, 2 = Join as Pro
-                  if (index == 0 || index == 1) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ServiceListScreen(),
-                      ),
-                    );
-                  } else {
+                onCtaTap: (banner) {
+                  final ctaText = banner.ctaText.toLowerCase();
+                  final title = banner.title.toLowerCase();
+                  final isProviderCta =
+                      ctaText.contains('register') || title.contains('join');
+                  if (isProviderCta) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Provider registration – coming soon!'),
+                        content: Text('Provider registration is coming soon!'),
                       ),
                     );
+                    return;
                   }
+
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ServiceListScreen(
+                        initialFilter: ServiceDiscoveryFilter(
+                          query: banner.title,
+                          autoApply: true,
+                        ),
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
@@ -664,7 +673,7 @@ class _SeekerSearchBarState extends State<_SeekerSearchBar> {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('services')
-          .where('status', isEqualTo: 'active')
+          .where('status', whereIn: const ['approved', 'active'])
           .limit(50)
           .get();
 

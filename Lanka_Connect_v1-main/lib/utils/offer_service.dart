@@ -6,10 +6,60 @@ class OfferService {
 
   static Future<List<Offer>> loadActiveOffers() async {
     final snapshot = await FirestoreRefs.offers().get();
-    return snapshot.docs
+    final offers = snapshot.docs
         .map((doc) => Offer.fromMap(doc.id, doc.data()))
         .where((offer) => offer.isActive)
         .toList();
+    if (offers.isNotEmpty) {
+      return offers;
+    }
+
+    // Backward-compatible fallback:
+    // if `offers` collection is empty, derive payable offers from
+    // active `promotions` tiles (e.g. "15% OFF", "Rs. 500 OFF").
+    final promotions = await FirestoreRefs.promotions()
+        .where('active', isEqualTo: true)
+        .get();
+    return promotions.docs
+        .map((doc) => _offerFromPromotion(doc.id, doc.data()))
+        .whereType<Offer>()
+        .toList();
+  }
+
+  static Offer? _offerFromPromotion(String id, Map<String, dynamic> data) {
+    final discountLabel = (data['discount'] ?? '').toString().trim();
+    if (discountLabel.isEmpty) return null;
+
+    final percentageMatch = RegExp(r'(\d+(?:\.\d+)?)\s*%').firstMatch(
+      discountLabel,
+    );
+    final normalized = discountLabel.replaceAll(',', '');
+    final amountMatch = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(normalized);
+
+    final linkedCategory = (data['linkedCategory'] ?? '').toString().trim();
+    if (percentageMatch != null) {
+      final value = double.tryParse(percentageMatch.group(1) ?? '');
+      if (value == null || value <= 0) return null;
+      return Offer(
+        id: 'promo_$id',
+        title: (data['title'] ?? 'Promotion').toString(),
+        isActive: true,
+        discountType: OfferDiscountType.percentage,
+        discountValue: value,
+        targetCategory: linkedCategory.isEmpty ? null : linkedCategory,
+      );
+    }
+
+    final value = double.tryParse(amountMatch?.group(1) ?? '');
+    if (value == null || value <= 0) return null;
+    return Offer(
+      id: 'promo_$id',
+      title: (data['title'] ?? 'Promotion').toString(),
+      isActive: true,
+      discountType: OfferDiscountType.flat,
+      discountValue: value,
+      targetCategory: linkedCategory.isEmpty ? null : linkedCategory,
+    );
   }
 
   static AppliedOfferResult? resolveBestOffer({

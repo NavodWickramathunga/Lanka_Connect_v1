@@ -159,7 +159,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } on FirebaseAuthException catch (e) {
       setState(() {
-        _error = e.message ?? 'Guest login failed.';
+        _error = _guestLoginError(e);
       });
     } catch (_) {
       setState(() {
@@ -222,10 +222,35 @@ class _AuthScreenState extends State<AuthScreen> {
       await handler(email);
       return;
     }
-    final callable = FirebaseFunctions.instance.httpsCallable(
-      'requestPasswordResetEmail',
-    );
-    await callable.call({'email': email});
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'requestPasswordResetEmail',
+      );
+      await callable.call({'email': email});
+      return;
+    } on FirebaseFunctionsException {
+      // Fall back to Firebase Auth native email flow so reset still works
+      // even if callable functions are unavailable/misconfigured.
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+    } catch (_) {
+      // Fall back to Firebase Auth native email flow so reset still works
+      // even if callable functions are unavailable/misconfigured.
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+    }
+  }
+
+  String _guestLoginError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'operation-not-allowed':
+        return 'Guest access is currently disabled. Please sign in with an account.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection and try guest access again.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a moment and try again.';
+      default:
+        return e.message ?? 'Guest login failed.';
+    }
   }
 
   String _passwordResetError(FirebaseAuthException e) {
@@ -430,6 +455,32 @@ class _AuthScreenState extends State<AuthScreen> {
                       color: headingColor,
                     ),
                   ),
+                  if (FirebaseEnv.backendLabel().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: DesignTokens.brandPrimary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: DesignTokens.brandPrimary.withValues(
+                            alpha: 0.35,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        'Environment: ${FirebaseEnv.backendLabel()}',
+                        style: TextStyle(
+                          color: headingColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Text(
                     _isLogin

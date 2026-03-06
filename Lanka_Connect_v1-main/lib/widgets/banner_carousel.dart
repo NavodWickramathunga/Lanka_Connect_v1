@@ -44,7 +44,7 @@ class BannerData {
 class BannerCarousel extends StatefulWidget {
   const BannerCarousel({super.key, this.onCtaTap});
 
-  final void Function(int index)? onCtaTap;
+  final void Function(BannerData banner)? onCtaTap;
 
   @override
   State<BannerCarousel> createState() => _BannerCarouselState();
@@ -136,7 +136,7 @@ class _BannerCarouselState extends State<BannerCarousel> {
                   final banner = banners[index];
                   return _BannerSlide(
                     banner: banner,
-                    onCtaTap: () => widget.onCtaTap?.call(index),
+                    onCtaTap: () => widget.onCtaTap?.call(banner),
                   );
                 },
               ),

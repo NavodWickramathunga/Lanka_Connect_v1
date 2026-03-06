@@ -106,6 +106,43 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
+  Future<bool> _ensureOfferSummaryOnBooking(Map<String, dynamic> booking) async {
+    final fallbackAmount = (booking['amount'] is num)
+        ? (booking['amount'] as num).toDouble()
+        : 0.0;
+    final summary = _offerSummary ??
+        await _resolveOfferSummary(booking) ??
+        <String, dynamic>{
+          'grossAmount': fallbackAmount,
+          'discountAmount': 0.0,
+          'netAmount': fallbackAmount,
+        };
+    try {
+      await FirestoreRefs.bookings().doc(widget.bookingId).set({
+        'grossAmount': summary['grossAmount'] ?? fallbackAmount,
+        'discountAmount': summary['discountAmount'] ?? 0.0,
+        'netAmount': summary['netAmount'] ?? fallbackAmount,
+        'appliedOfferId': summary['appliedOfferId'] ?? '',
+        'discountMeta': summary['discountMeta'] ?? <String, dynamic>{},
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (mounted) {
+        setState(() {
+          _offerSummary = summary;
+        });
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        FirestoreErrorHandler.showError(
+          context,
+          'Could not apply the selected discount. Please try again.',
+        );
+      }
+      return false;
+    }
+  }
+
   double _resolveNetAmount(Map<String, dynamic> booking) {
     final fallback = (booking['amount'] is num)
         ? (booking['amount'] as num).toDouble()
@@ -135,6 +172,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         : (user.email ?? '').trim();
     final phoneRaw = _phoneController.text.trim();
     final phone = Validators.normalizePhoneToE164(phoneRaw);
+
+    final synced = await _ensureOfferSummaryOnBooking(booking);
+    if (!synced) return;
 
     setState(() => _saving = true);
     try {
@@ -186,6 +226,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       FirestoreErrorHandler.showError(context, 'Please select a bank account.');
       return;
     }
+
+    final synced = await _ensureOfferSummaryOnBooking(booking);
+    if (!synced) return;
 
     final netAmount = _resolveNetAmount(booking);
     final paidAmount = double.tryParse(_transferAmountController.text.trim());
@@ -255,6 +298,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
                   'Applied offer: ${_offerSummary?['appliedOfferId']}',
+                ),
+              ),
+            if ((_offerSummary?['discountMeta']?['title'] ?? '')
+                .toString()
+                .isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Offer title: ${_offerSummary?['discountMeta']?['title']}',
                 ),
               ),
           ],
